@@ -18,8 +18,9 @@
 // Environment (never commit these):
 //   SUPABASE_URL              https://<ref>.supabase.co                  (required)
 //   SUPABASE_ANON_KEY         public anon key (needed for owner sign-in)
-//   SUPABASE_OWNER_EMAIL      owner account email     } preferred: signs in as the owner,
-//   SUPABASE_OWNER_PASSWORD   owner account password  } so Row Level Security applies
+//   SUPABASE_OWNER_EMAIL      bot/owner account email     } preferred: signs in as a board owner
+//   SUPABASE_OWNER_PASSWORD   bot/owner account password  } (listed in public.board_owners), so RLS applies
+//                             e.g. the bot account johnsonmoges+postit-bot@gmail.com
 //   SUPABASE_SERVICE_KEY      fallback only (bypasses RLS) — alias: SUPABASE_KEY
 
 import { readFileSync } from "node:fs";
@@ -108,9 +109,12 @@ async function main() {
     });
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
-    if (!res.ok) throw new Error(`${method} ${path.split("?")[0]} failed (${res.status}): ${data?.message || text}`);
+    if (!res.ok) {
+      const hint = /row-level security/i.test(data?.message || "") ? " (this account is not in public.board_owners)" : "";
+      throw new Error(`${method} ${path.split("?")[0]} failed (${res.status}): ${data?.message || text}${hint}`);
+    }
     if (method !== "GET" && Array.isArray(data) && data.length === 0) {
-      throw new Error(`${method} ${path.split("?")[0]} affected no rows — is the owner UUID in schema.sql correct?`);
+      throw new Error(`${method} ${path.split("?")[0]} affected no rows — is this account listed in public.board_owners?`);
     }
     return data;
   }

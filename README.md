@@ -23,6 +23,7 @@ Day (board_date)            e.g. 2026-10-05
 | `days`  | `id`, `board_date` (unique), `title`, `created_at` |
 | `pins`  | `id`, `day_id → days` (on delete cascade), `title`, `color` (yellow/pink/blue/green), `position`, `created_at`, `updated_at` |
 | `pages` | `id`, `pin_id → pins` (on delete cascade), `title`, `body`, `position`, `created_at`, `updated_at` |
+| `board_owners` | `user_id → auth.users` (on delete cascade), `label`, `created_at`: who may write |
 
 Deleting a pin permanently deletes its pages. There is no recycle bin.
 
@@ -50,7 +51,7 @@ Links are shareable via the URL hash, e.g. `#day=2026-10-05&pin=<id>&page=2`.
 | `store.js` | storage layer (Supabase REST or local demo) + Supabase Auth session |
 | `config.js` | Supabase URL + **public anon key** (empty = demo mode) |
 | `config.example.js` | example of a filled config |
-| `supabase/schema.sql` | tables, cascade deletes, Row Level Security policies |
+| `supabase/schema.sql` | tables, cascade deletes, `board_owners`, Row Level Security policies (idempotent) |
 | `scripts/post.mjs` | command-line poster the bot uses |
 | `scripts/write-config.mjs` | writes `config.js` from env vars |
 | `.nojekyll` | tells GitHub Pages to serve files as-is |
@@ -73,38 +74,54 @@ No Edge Functions, no paid add-ons.
 | who | read | add / edit / delete |
 |-----|------|---------------------|
 | anyone with the site (anon key) | ✅ | ❌ |
-| the owner, signed in | ✅ | ✅ |
+| signed-in users listed in `public.board_owners` (you + the bot) | ✅ | ✅ |
 | any other signed-in user | ✅ | ❌ |
+
+Write access is controlled by a tiny table, `public.board_owners(user_id → auth.users)`. Every
+insert/update/delete policy on `days`/`pins`/`pages` checks `public.is_board_owner()`, a
+`security definer` helper that looks the current user up in that table. `board_owners` has RLS on and
+no anon access; a signed-in user can only see their own row. You manage it from the SQL editor.
 
 Steps:
 
-1. **Create the owner account.** In the Supabase dashboard go to *Authentication → Users → Add user*.
-   Enter your email and a strong password, and tick "Auto confirm user". Copy the user's **UID**.
-   Then turn off public sign-ups (*Authentication → Sign In / Providers → Allow new users to sign up* = off).
-2. **Create the tables.** Open `supabase/schema.sql` and replace every `<OWNER_USER_UUID>` with that UID
-   (9 occurrences; Find & Replace). Paste it into *SQL Editor* and click **Run**. If you forget to
-   replace it, the script fails without changing anything.
-3. **Point the site at your project.** Find the values in *Project Settings → API*:
+1. **Create the tables.** Paste `supabase/schema.sql` into *SQL Editor* and click **Run**. Nothing to edit
+   first. The script is idempotent, so re-running it later (e.g. after an update) is safe and keeps your data.
+2. **Create the accounts.** Go to *Authentication → Users → Add user* and create:
+   - your own owner account (email + strong password), and
+   - the bot account `johnsonmoges+postit-bot@gmail.com` (used by `scripts/post.mjs`).
+
+   Tick "Auto confirm user" for both. Then turn off public sign-ups
+   (*Authentication → Sign In / Providers → Allow new users to sign up* = off).
+3. **Make them board owners** (SQL Editor):
+   ```sql
+   select id, email from auth.users order by created_at;               -- find the ids
+   insert into public.board_owners(user_id) values ('<uuid>') on conflict do nothing;   -- once per user
+   ```
+   To revoke access: `delete from public.board_owners where user_id = '<uuid>';`
+4. **Point the site at your project.** Find the values in *Project Settings → API*:
    ```bash
    SUPABASE_URL=https://<ref>.supabase.co SUPABASE_ANON_KEY=<public anon key> node scripts/write-config.mjs
    git add config.js && git commit -m "Connect Supabase" && git push
    ```
    (Or just edit `config.js` by hand.) The anon/publishable key is **meant to be public**. RLS keeps it
    read-only. **Never** put the `service_role` / secret key in `config.js`. The script refuses it.
-4. Open the site and click the **🔒 lock**. Sign in with the owner email and password. The **+**, select and
-   trash tools appear. The session is kept in `localStorage` and refreshed automatically. Click the lock
-   again to sign out.
+5. Open the site and click the **🔒 lock**. Sign in with your owner email and password. The **+**, select
+   and trash tools appear. The session is kept in `localStorage` and refreshed automatically. Click the
+   lock again to sign out. (Signing in with an account that isn't in `board_owners` still shows the
+   tools, but every change is rejected by the database.)
 
 ## How the bot posts
 
 `scripts/post.mjs` (Node 18+, no dependencies) finds or creates the day, finds or creates the pin
-(the topic name is matched without regard to case), and appends a page at the end:
+(the topic name is matched without regard to case), and appends a page at the end. It signs in
+as the **bot account**, which is listed in `public.board_owners`, so it goes through the same RLS
+rules as the website:
 
 ```bash
 export SUPABASE_URL=https://<ref>.supabase.co
 export SUPABASE_ANON_KEY=<public anon key>
-export SUPABASE_OWNER_EMAIL=<owner email>         # preferred: signs in as the owner, so RLS applies
-export SUPABASE_OWNER_PASSWORD=<owner password>
+export SUPABASE_OWNER_EMAIL=johnsonmoges+postit-bot@gmail.com   # the bot account (must be in board_owners)
+export SUPABASE_OWNER_PASSWORD=<bot password>
 
 node scripts/post.mjs --date 2026-10-05 --pin "AI" --page-title "LLMs" --body "Large language models predict the next word."
 echo "long text..." | node scripts/post.mjs --pin "Agents" --page-title "Loops" --body -
