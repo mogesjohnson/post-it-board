@@ -1,0 +1,6 @@
+# Secrets / local overrides — never commit these
+.env
+.env.*
+config.local.js
+node_modules/
+.DS_Store

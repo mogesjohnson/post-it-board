@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Post-it Board</title>
+  <meta name="description" content="A classroom corkboard of daily notes: one pin per topic, pages inside each pin." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📌</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Permanent+Marker&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="room">
+    <div class="frame">
+      <div class="cork" id="cork">
+        <header class="board-head">
+          <h1 class="title-card"><span class="tack" aria-hidden="true"></span>Post-it Board</h1>
+
+          <nav class="day-nav" aria-label="Choose day">
+            <button class="icon-btn" id="olderBtn" title="Older day" aria-label="Older day">&#8249;</button>
+            <select id="daySelect" aria-label="Day"></select>
+            <button class="icon-btn" id="newerBtn" title="Newer day" aria-label="Newer day">&#8250;</button>
+            <button class="chip-btn editor-only" id="addDayBtn" title="Add a day">+ day</button>
+          </nav>
+
+          <div class="tools">
+            <button class="icon-btn editor-only" id="addBtn" title="Add" aria-label="Add">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <button class="icon-btn editor-only" id="selectBtn" title="Select mode" aria-label="Select mode" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12.5l3 3 5-6"/></svg>
+            </button>
+            <button class="icon-btn trash editor-only" id="trashBtn" title="Delete selected" aria-label="Delete selected" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>
+              <span class="badge" id="trashCount">0</span>
+            </button>
+            <button class="icon-btn" id="lockBtn" title="Owner sign in" aria-label="Owner sign in" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path id="lockShackle" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="banner" id="banner" hidden>Demo mode &mdash; Supabase not connected</div>
+
+        <main id="view" aria-live="polite"></main>
+
+        <!-- decoration: a paper gold star pinned in the corner -->
+        <svg class="deco-star" viewBox="0 0 100 100" aria-hidden="true">
+          <polygon points="50,6 62,38 96,38 68,58 78,92 50,72 22,92 32,58 4,38 38,38" fill="#f6c945" stroke="#c99a1e" stroke-width="3" stroke-linejoin="round"/>
+          <circle cx="50" cy="48" r="5" fill="#2f6fd6"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- chalk-tray ledge with a ruler, an apple and a pencil cup -->
+    <div class="ledge" aria-hidden="true">
+      <div class="ruler"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span></div>
+      <div class="desk-items">
+        <svg class="apple" viewBox="0 0 64 64">
+          <path d="M32 18c-4-4-14-6-20 2-6 9-2 24 6 32 4 4 8 5 14 2 6 3 10 2 14-2 8-8 12-23 6-32-6-8-16-6-20-2z" fill="#d7322a"/>
+          <path d="M20 24c-3 4-3 10-1 14" stroke="#ff8f86" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M32 18c0-5 1-9 4-12" stroke="#6b3e1d" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M35 12c5-5 12-5 15-3-3 5-9 7-15 3z" fill="#4c9a3a"/>
+        </svg>
+        <svg class="pencil-cup" viewBox="0 -12 64 92">
+          <g stroke-linecap="round">
+            <rect x="16" y="4" width="7" height="40" fill="#f5b82e" transform="rotate(-10 20 40)"/>
+            <polygon points="16,4 23,4 19.5,-6" fill="#f2d3a0" transform="rotate(-10 20 40)"/>
+            <rect x="29" y="0" width="7" height="44" fill="#3b82c4"/>
+            <polygon points="29,0 36,0 32.5,-9" fill="#f2d3a0"/>
+            <rect x="41" y="6" width="7" height="40" fill="#e0533d" transform="rotate(9 44 40)"/>
+            <polygon points="41,6 48,6 44.5,-4" fill="#f2d3a0" transform="rotate(9 44 40)"/>
+          </g>
+          <path d="M10 36h44l-4 42H14z" fill="#6c7f8f"/>
+          <path d="M10 36h44v6H10z" fill="#55687a"/>
+          <text x="32" y="64" font-size="11" text-anchor="middle" fill="#e8eef3" font-family="Patrick Hand, cursive">A+</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="modal">
+    <form method="dialog" id="modalForm">
+      <h2 id="modalTitle">Title</h2>
+      <div id="modalFields"></div>
+      <p class="form-error" id="modalError" hidden></p>
+      <menu>
+        <button value="cancel" formnovalidate class="chip-btn">Cancel</button>
+        <button value="ok" id="modalOk" class="chip-btn primary">OK</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
