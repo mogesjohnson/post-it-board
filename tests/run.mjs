@@ -129,6 +129,7 @@ const FALSE_MERGES = [
   ["Standup 20261105", "Standup 20261015"],
   ["Git", "Git tips"],                          // prefix rule needs 4+ letters/digits in the shorter title
   ["AI x", "AI x notes"],                       // ... and spaces don't count toward the 4
+  ["C++ x", "C++ x notes"],                     // ... nor do + and #
   ["कल", "काल"],                                // vowel signs of other scripts are not accents
 ];
 for (const [seed, typed] of FALSE_MERGES) {
@@ -171,6 +172,27 @@ await test("H3 emoji with and without the variation selector are the same pin (�
   const b = await add("❤", "two", "b");
   ok(b, b.result.matchType === "exact" && db().pins.length === 1 && db().pages.length === 2);
 });
+await test("H3 ... in the other direction too (❤ pin, then ❤️)", async () => {
+  mock.reset();
+  await add("❤", "one", "a");
+  const b = await add("❤️", "two", "b");
+  ok(b, b.result.matchType === "exact" && db().pins.length === 1 && db().pages.length === 2);
+});
+for (const other of ["☀️", "🚗️"]) {
+  await test(`H3 "${other}" never lands in the "❤️" pin (selectors are not the title)`, async () => {
+    mock.reset();
+    await add("❤️", "one", "a");
+    const b = await add(other, "two", "b");
+    ok(b, b.result.matchType === "new" && db().pins.length === 2);
+  });
+}
+for (const typed of ["Tools", "🛠 Tools"]) {
+  await test(`emoji decoration is ignored next to words: "${typed}" -> "🛠️ Tools"`, async () => {
+    setup(["🛠️ Tools"]);
+    const r = await add(typed, "b");
+    ok(r, r.result.matchType === "exact" && db().pins.length === 1);
+  });
+}
 await test(`H3 different emoji stay separate; same emoji+page is a duplicate`, async () => {
   mock.reset();
   await add("🚗", "one", "a");

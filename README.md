@@ -160,7 +160,8 @@ Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohns
 
 - **add** matches the pin loosely on that day:
   - case, spaces, punctuation and Latin accents are ignored ("postit board" finds "Post-it Board", "cafe"
-    finds "Café");
+    finds "Café"). A match like this always wins: the typo and prefix rules below are only tried when there
+    is none;
   - a small typo is allowed in words made only of letters, 5+ letters long in both spellings: one missing,
     extra or swapped letter that keeps the first letter, in at most 2 words of a title with the same number of
     words ("QA Live Zebar" finds "QA Live Zebra", "AI agent" finds "AI agents"). A *changed* letter never
@@ -174,7 +175,7 @@ Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohns
   "Trail"/"Trial", "Diary"/"Dairy", "Angel"/"Angle"), and plurals of 4-letter words don't ("Lesson plan" makes
   a new pin next to "Lesson plans"). Reuse the exact pin title when you know it.
 
-  With no match it creates the pin. With several possible matches it writes nothing (`skipped_ambiguous`).
+  With no match it creates the pin. With several possible typo/prefix matches (and no exact one) it writes nothing (`skipped_ambiguous`).
   If a page with the same title **and** text was added to that pin in the last 10 minutes, it skips it
   (`skipped_duplicate`, with that page's `pageNumber`).
 - **edit/delete** need an exact pin title (case-insensitive) and an exact page title or `pageNumber`.
@@ -183,9 +184,9 @@ Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohns
   command removed) and `error` (real failure: exit 1, command kept so a re-run retries it). One failed command
   doesn't stop the others in the same run.
 - If the workflow can't push the results back to `inbox` (5 attempts), the run **fails** with an error that
-  names only the commands that changed the board (status `ok`). Those are still waiting in `inbox/`, so a
-  re-run would apply them again: delete just those command files before re-running. Leave the others; they
-  didn't change anything.
+  names only the commands that changed the board (status `ok`). Those are still waiting in `inbox/`, so the
+  next run (a manual re-run, or any new command pushed to `inbox`) would apply them again: delete just those
+  command files right away. Leave the others; they didn't change anything.
 
 Examples:
 ```json

@@ -49,7 +49,9 @@ function isValidDate(s) {
 // "Post-it  Board!" -> "postit board" (case, Latin accents, punctuation, extra spaces ignored; keeps + and #).
 // Only Latin combining accents are dropped: vowel signs of other scripts carry meaning ("\u0915\u093e\u0932" is not "\u0915\u0932").
 function norm(s) {
-  return String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  // Variation selectors (the U+FE0F in "\u2764\ufe0f") and enclosing marks (keycaps) are marks too, but only change how an
+  // emoji looks: drop them, or every emoji title would normalize to the same leftover selector.
+  return String(s).normalize("NFKD").replace(/[\u0300-\u036f\ufe00-\ufe0f\u{e0100}-\u{e01ef}\p{Me}]/gu, "").toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}\s+#]/gu, "").replace(/\s+/g, " ").trim();
 }
 const squash = s => norm(s).replace(/ /g, "");                 // also ignore spaces
@@ -217,7 +219,7 @@ function fuzzyFindPin(pins, wanted) {
     if (typoMatch(pn, wn)) return true;
     // whole-word prefix, e.g. "Python" ~ "Python lists" (only when the shorter title has 4+ letters/digits)
     const [s, l] = pn.length <= wn.length ? [pn, wn] : [wn, pn];
-    return s.replace(/ /g, "").length >= 4 && l.startsWith(s + " ");
+    return s.replace(/[^\p{L}\p{N}]/gu, "").length >= 4 && l.startsWith(s + " ");
   });
   if (close.length === 1) return { pin: close[0], matchType: "fuzzy" };
   if (close.length > 1) return { ambiguous: close };

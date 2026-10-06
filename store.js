@@ -56,6 +56,7 @@
     onExpired: null,   // set by the UI: called when a session is dropped because it expired (not on sign-out)
     onChange: null,    // set by the UI: called when another tab signs in or out
     _refreshing: null, // the one refresh in flight, shared by every request that needs it
+    _reported: false,  // signed-in state the UI last knew about (for the cross-tab storage event)
     // Read the session from localStorage: another tab may have refreshed it or signed out.
     load: function () {
       var raw;
@@ -66,6 +67,7 @@
     save: function (s) {
       if (s && !s.expires_at && s.expires_in) s.expires_at = Math.floor(Date.now() / 1000) + Number(s.expires_in);
       this.session = s;
+      this._reported = this.isSignedIn(); // this tab's own change: its UI already knows
       if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
       else localStorage.removeItem(SESSION_KEY);
     },
@@ -104,6 +106,8 @@
           method: "POST",
           headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
           body: JSON.stringify({ refresh_token: sent }),
+          // every request waits on this one refresh, so it must not hang forever
+          signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined,
         });
       } catch (e) { throw new Error(OFFLINE); }                               // network blip: keep the session
       var data = await res.json().catch(function () { return {}; });
@@ -341,12 +345,15 @@
   /* ------------------------------------------------------------------ */
   if (configured) {
     Auth.load();
+    Auth._reported = Auth.isSignedIn();
     // Another tab signed in or out: follow it.
     window.addEventListener("storage", function (e) {
       if (e.key !== SESSION_KEY && e.key !== null) return;
-      var was = Auth.isSignedIn();
+      // Compare with what the UI was last told, not Auth.session: token() may already have loaded the change.
       Auth.load();
-      if (was !== Auth.isSignedIn() && typeof Auth.onChange === "function") Auth.onChange();
+      if (Auth._reported === Auth.isSignedIn()) return;
+      Auth._reported = Auth.isSignedIn();
+      if (typeof Auth.onChange === "function") Auth.onChange();
     });
   }
   window.PostItStore = configured ? new SupabaseStore() : new LocalStore();
