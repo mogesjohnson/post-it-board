@@ -110,6 +110,7 @@ const TRUE_MATCHES = [
   ["Garage shelves", "Garage shelvs"],  // missing letter
   ["AI agents", "AI agent"],            // plural
   ["Kitchen remodel", "Kitchen remodell"], // extra letter
+  ["Zebra Lions", "Zebar Loins"],       // two differing words is the most allowed
 ];
 for (const [seed, typed] of TRUE_MATCHES) {
   await test(`H2 typo match: "${typed}" -> "${seed}"`, async () => {
@@ -121,6 +122,14 @@ for (const [seed, typed] of TRUE_MATCHES) {
 const FALSE_MERGES = [
   ["Code", "Node"], ["Cars", "Cats"], ["Rust", "Dust"], ["Home ideas", "Game ideas"], ["Book notes", "Cook notes"],
   ["Watch", "Match"], ["Bread", "Break"], ["AI", "UI"], ["Python", "Pythonic"], ["Market", "Marker"], ["Planning", "Planting"],
+  ["Train", "Strain"],                          // a slip, but the first letter changed
+  ["Plan", "Plans"],                            // a slip, but in a 4-letter word
+  ["Zebra Lions Tigers", "Zebar Loins Tigres"], // three slipped words is too many
+  ["Order 10243", "Order 10234"],               // digits never get typo tolerance
+  ["Standup 20261105", "Standup 20261015"],
+  ["Git", "Git tips"],                          // prefix rule needs 4+ letters/digits in the shorter title
+  ["AI x", "AI x notes"],                       // ... and spaces don't count toward the 4
+  ["कल", "काल"],                                // vowel signs of other scripts are not accents
 ];
 for (const [seed, typed] of FALSE_MERGES) {
   await test(`H2 stays separate: "${typed}" vs "${seed}"`, async () => {
@@ -129,6 +138,16 @@ for (const [seed, typed] of FALSE_MERGES) {
     ok(r, r.result.matchType === "new" && db().pins.length === 2);
   });
 }
+await test('exact match still ignores Latin accents ("Café" = "cafe")', async () => {
+  setup(["Café"]);
+  const r = await add("cafe", "b");
+  ok(r, r.result.matchType === "exact" && db().pins.length === 1);
+});
+await test("prefix rule: 4 letters/digits qualify even with a space (AI 20 -> AI 20 recap)", async () => {
+  setup(["AI 20"]);
+  const r = await add("AI 20 recap", "b");
+  ok(r, r.result.matchType === "fuzzy" && db().pins.length === 1);
+});
 await test("H2 typo ambiguity -> skipped_ambiguous", async () => {
   setup(["Zebra notes", "Zebars notes"]); // "Zebar notes" is one slip from both
   const r = await add("Zebar notes", "b");
@@ -146,6 +165,12 @@ for (const t of ["🚗", "!!!"]) {
     ok(b, b.result.matchType === "exact" && db().pins.length === 1 && db().pages.length === 2);
   });
 }
+await test("H3 emoji with and without the variation selector are the same pin (❤️ = ❤)", async () => {
+  mock.reset();
+  await add("❤️", "one", "a");
+  const b = await add("❤", "two", "b");
+  ok(b, b.result.matchType === "exact" && db().pins.length === 1 && db().pages.length === 2);
+});
 await test(`H3 different emoji stay separate; same emoji+page is a duplicate`, async () => {
   mock.reset();
   await add("🚗", "one", "a");
@@ -204,6 +229,15 @@ await test("H7 skipped_duplicate reports pageNumber, matchType and the existing 
   status(r, "skipped_duplicate");
   expect(r.result.pageNumber === 2 && r.result.matchType === "exact" && r.result.matched.pageId === p2.id
     && r.result.matched.pinTitle === "AI" && r.result.date === D, r.result);
+});
+await test("H7 skipped_duplicate of page 1 of 3 reports pageNumber 1 (pages are put in order first)", async () => {
+  const { pins } = setup(["AI"]);
+  const p1 = seedPage(pins[0], "t", "same", 0);
+  seedPage(pins[0], "p2", "two", 1);
+  seedPage(pins[0], "p3", "three", 2);
+  const r = await add("AI", "same", "t");
+  status(r, "skipped_duplicate");
+  expect(r.result.pageNumber === 1 && r.result.matched.pageId === p1.id, r.result);
 });
 await test("H7 add reports the real page number when positions have gaps", async () => {
   const { pins } = setup(["AI"]);
@@ -322,6 +356,14 @@ await test("quick-add CLI: appends a page and prints its page number", async () 
   const r = await runPost(["--date", D, "--pin", "ai", "--page-title", "LLMs", "--body", "line 1\\nline 2"]);
   const line = JSON.parse(r.out.trim().split("\n").pop());
   expect(r.code === 0 && line.page_number === 1 && db().pins.length === 1 && db().pages[0].body === "line 1\nline 2", r);
+});
+await test("quick-add CLI: page number is the place in order, even with position gaps", async () => {
+  const { pins } = setup(["AI"]);
+  seedPage(pins[0], "a", "1", 0);
+  seedPage(pins[0], "c", "3", 5); // a page in between was deleted
+  const r = await runPost(["--date", D, "--pin", "AI", "--body", "new"]);
+  const line = JSON.parse(r.out.trim().split("\n").pop());
+  expect(r.code === 0 && line.page_number === 3 && db().pages.length === 3, r);
 });
 await test("process exits by itself with the right code (keep-alive connections)", async () => {
   mock.reset();

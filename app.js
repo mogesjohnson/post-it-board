@@ -83,21 +83,29 @@
   async function loadPins() {
     state.pins = state.dayId ? await store.listPins(state.dayId) : [];
   }
+  // Every navigation bumps this, so a slow page load can't open a pin after the user has moved on.
+  var navSeq = 0;
   // Selections only ever cover what the current view shows: pins on the board, pages in a pin.
-  async function openPin(pinId, pageIdx) {
-    state.pinId = pinId;
-    state.pages = await store.listPages(pinId);
-    state.pageIdx = Math.max(0, Math.min(pageIdx || 0, state.pages.length - 1));
+  // The pages load first, so a failed load leaves the current view untouched.
+  async function openPin(pinId, pageIdx, focusKey) {
+    var seq = ++navSeq;
+    var pages = await store.listPages(pinId);
+    if (seq !== navSeq) return;
+    state.pinId = pinId; state.pages = pages;
+    state.pageIdx = Math.max(0, Math.min(pageIdx || 0, pages.length - 1));
     state.selPins.clear(); state.selPages.clear();
+    if (focusKey) state.focusNext = focusKey;
     render();
   }
   function closePin() {
+    navSeq++;
     if (state.pinId) state.focusNext = "note:" + state.pinId; // back to the note we came from
     state.animateAll = true;
     state.pinId = null; state.pages = []; state.pageIdx = 0; state.selPages.clear();
     render();
   }
   async function goDay(dayId) {
+    navSeq++;
     state.dayId = dayId; state.pinId = null; state.pages = []; state.animateAll = true;
     state.selPins.clear(); state.selPages.clear();
     await loadPins();
@@ -108,6 +116,7 @@
   function render() {
     // Re-rendering replaces the view, so remember which control had focus and restore it afterwards.
     var a = document.activeElement;
+    var viewChange = !!state.focusNext; // opening or closing a pin: the focused control may be far down the page
     var focusKey = state.focusNext || (a && view.contains(a) ? a.getAttribute("data-focus") : null);
     state.focusNext = null;
     document.body.classList.toggle("can-edit", canEdit());
@@ -117,18 +126,29 @@
     view.textContent = "";
     view.appendChild(state.pinId ? renderPinView() : renderBoard());
     writeHash();
-    restoreFocus(focusKey);
+    restoreFocus(focusKey, viewChange);
   }
   // A pager button can become disabled at either end, so fall back to its partner, then "← All pins".
-  var FOCUS_FALLBACK = { next: ["next", "prev", "back"], prev: ["prev", "next", "back"] };
-  function restoreFocus(key) {
+  // A selection checkbox is hidden when select mode ends, so fall back to its note or page chip.
+  function focusCandidates(key) {
+    if (key === "next") return ["next", "prev", "back"];
+    if (key === "prev") return ["prev", "next", "back"];
+    if (key.indexOf("pick-pin:") === 0) return [key, "note:" + key.slice(9)];
+    if (key.indexOf("pick-page:") === 0) return [key, "chip:" + key.slice(10)];
+    return [key];
+  }
+  function restoreFocus(key, scroll) {
     if (!key) return;
-    var keys = FOCUS_FALLBACK[key] || [key];
+    var keys = focusCandidates(key);
     var nodes = view.querySelectorAll("[data-focus]");
     for (var k = 0; k < keys.length; k++) {
       for (var i = 0; i < nodes.length; i++) {
         var n = nodes[i];
-        if (n.getAttribute("data-focus") === keys[k] && !n.disabled) { n.focus({ preventScroll: true }); return; }
+        if (n.getAttribute("data-focus") !== keys[k] || n.disabled) continue;
+        n.focus({ preventScroll: true });
+        if (document.activeElement !== n) continue; // hidden (display:none) controls can't take focus
+        if (scroll) n.scrollIntoView({ block: "nearest" });
+        return;
       }
     }
   }
@@ -177,7 +197,7 @@
         onclick: function (e) {
           if (e.target.classList.contains("pick")) return;
           if (state.selecting) toggleSel(state.selPins, pin.id);
-          else { state.focusNext = "back"; openPin(pin.id, 0).catch(fail); }
+          else openPin(pin.id, 0, "back").catch(fail);
         },
         onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
         onanimationend: function (e) { if (e.target === e.currentTarget) e.currentTarget.style.animation = "none"; },
@@ -418,9 +438,9 @@
   async function route() {
     var h = readHash();
     var day = h.day && state.days.find(function (d) { return d.board_date === h.day; });
-    if (day && day.id !== state.dayId) { state.dayId = day.id; state.selPins.clear(); await loadPins(); }
+    if (day && day.id !== state.dayId) { navSeq++; state.dayId = day.id; state.selPins.clear(); await loadPins(); }
     if (h.pin && state.pins.some(function (p) { return p.id === h.pin; })) await openPin(h.pin, h.page - 1);
-    else { state.pinId = null; state.pages = []; state.selPages.clear(); render(); }
+    else { navSeq++; state.pinId = null; state.pages = []; state.selPages.clear(); render(); }
   }
 
   // The store drops a session the server no longer accepts; switch to the read-only view and say why.
@@ -430,6 +450,19 @@
     else document.body.classList.toggle("can-edit", canEdit()); // first load still running; start() renders the board
     toast("Signed out — your session expired. The board is read-only.");
   };
+  // Another tab signed in or out.
+  Auth.onChange = function () {
+    if (!state.ready) return;
+    render();
+    toast(Auth.isSignedIn() ? "Signed in as " + Auth.email() : "Signed out in another tab — read-only view.");
+  };
+  // Phones drop the weekday from the day picker (see fmtDate); relabel when the width crosses that line.
+  if (window.matchMedia) {
+    var narrowQuery = window.matchMedia("(max-width: 640px)");
+    var relabel = function () { if (state.ready) renderHeader(); };
+    if (narrowQuery.addEventListener) narrowQuery.addEventListener("change", relabel);
+    else if (narrowQuery.addListener) narrowQuery.addListener(relabel);
+  }
 
   async function start() {
     $("banner").hidden = store.mode !== "local";

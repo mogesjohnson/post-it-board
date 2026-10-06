@@ -159,13 +159,20 @@ Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohns
 ```
 
 - **add** matches the pin loosely on that day:
-  - case, spaces, accents and punctuation are ignored ("postit board" finds "Post-it Board");
-  - a small typo in a longer word is allowed: one missing, extra or swapped letter in a word of 5+ letters
-    that keeps its first letter ("QA Live Zebar" finds "QA Live Zebra", "AI agent" finds "AI agents"). A
-    *changed* letter never counts, and short words must match exactly, so "Code"/"Node", "Cars"/"Cats",
-    "Bread"/"Break" and "AI"/"UI" stay separate pins;
-  - a whole-word prefix counts ("Python lists" finds "Python") when the shorter title has 4+ letters;
-  - titles with no letters or digits (e.g. "🚗") must match exactly.
+  - case, spaces, punctuation and Latin accents are ignored ("postit board" finds "Post-it Board", "cafe"
+    finds "Café");
+  - a small typo is allowed in words made only of letters, 5+ letters long in both spellings: one missing,
+    extra or swapped letter that keeps the first letter, in at most 2 words of a title with the same number of
+    words ("QA Live Zebar" finds "QA Live Zebra", "AI agent" finds "AI agents"). A *changed* letter never
+    counts, and short words and numbers must match exactly, so "Code"/"Node", "Cars"/"Cats", "Bread"/"Break",
+    "AI"/"UI" and "Order 10243"/"Order 10234" stay separate pins;
+  - a whole-word prefix counts ("Python lists" finds "Python") when the shorter title has 4+ letters or digits
+    (spaces don't count, so "Git" and "Git tips" stay separate);
+  - titles with no letters or digits (e.g. "🚗") must match exactly (❤️ and ❤ count as the same).
+
+  Known trade-offs: real words one missing, extra or swapped letter apart still merge ("Plants"/"Planets",
+  "Trail"/"Trial", "Diary"/"Dairy", "Angel"/"Angle"), and plurals of 4-letter words don't ("Lesson plan" makes
+  a new pin next to "Lesson plans"). Reuse the exact pin title when you know it.
 
   With no match it creates the pin. With several possible matches it writes nothing (`skipped_ambiguous`).
   If a page with the same title **and** text was added to that pin in the last 10 minutes, it skips it
@@ -173,10 +180,12 @@ Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohns
 - **edit/delete** need an exact pin title (case-insensitive) and an exact page title or `pageNumber`.
   They never guess (`skipped_not_found` / `skipped_ambiguous`). Deleting a pin deletes its pages.
 - Statuses: `ok`, `skipped_duplicate`, `skipped_ambiguous`, `skipped_not_found`, `error_invalid` (exit 0,
-  command removed) and `error` (real failure: exit 1, command kept so a re-run retries it).
+  command removed) and `error` (real failure: exit 1, command kept so a re-run retries it). One failed command
+  doesn't stop the others in the same run.
 - If the workflow can't push the results back to `inbox` (5 attempts), the run **fails** with an error that
-  names the commands. They were already applied but are still waiting in `inbox/`, so check the board
-  before re-running, or delete those command files.
+  names only the commands that changed the board (status `ok`). Those are still waiting in `inbox/`, so a
+  re-run would apply them again: delete just those command files before re-running. Leave the others; they
+  didn't change anything.
 
 Examples:
 ```json

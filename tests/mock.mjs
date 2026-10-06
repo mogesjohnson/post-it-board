@@ -44,7 +44,8 @@ export function createMock() {
     return true;
   }
   function order(rows, spec) {
-    if (!spec) return rows;
+    // Without order= PostgREST promises no order: hand rows back newest-first so code that forgets to sort is caught.
+    if (!spec) return [...rows].reverse();
     const keys = spec.split(",").map(s => { const [c, d] = s.split("."); return [c, d === "desc" ? -1 : 1]; });
     return [...rows].sort((a, b) => {
       for (const [c, d] of keys) {
@@ -118,6 +119,9 @@ export function createMock() {
     send(res, 405, { message: "method not allowed" });
   });
 
+  // Keep idle connections open far longer than the exit-time check allows, so a client that only exits once
+  // the server drops its sockets shows up as a hang instead of passing by luck (Node's default is 5 s).
+  api.server.keepAliveTimeout = 60000;
   api.listen = (port = 0) => new Promise(r => api.server.listen(port, "127.0.0.1", () => {
     api.url = `http://127.0.0.1:${api.server.address().port}`;
     r(api);

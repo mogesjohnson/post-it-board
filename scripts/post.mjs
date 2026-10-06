@@ -46,13 +46,15 @@ function isValidDate(s) {
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
-// "Post-it  Board!" -> "postit board" (case, accents, punctuation, extra spaces ignored; keeps + and #)
+// "Post-it  Board!" -> "postit board" (case, Latin accents, punctuation, extra spaces ignored; keeps + and #).
+// Only Latin combining accents are dropped: vowel signs of other scripts carry meaning ("\u0915\u093e\u0932" is not "\u0915\u0932").
 function norm(s) {
   return String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-    .replace(/[^\p{L}\p{N}\s+#]/gu, "").replace(/\s+/g, " ").trim();
+    .replace(/[^\p{L}\p{M}\p{N}\s+#]/gu, "").replace(/\s+/g, " ").trim();
 }
 const squash = s => norm(s).replace(/ /g, "");                 // also ignore spaces
-const exactCI = s => String(s).trim().replace(/\s+/g, " ").toLowerCase(); // edit/delete matching
+// edit/delete matching (and add, for titles without letters/digits); emoji variation selectors are ignored (\u2764\ufe0f = \u2764)
+const exactCI = s => String(s).replace(/[\ufe0e\ufe0f]/g, "").trim().replace(/\s+/g, " ").toLowerCase();
 // One slip: a and b differ by exactly one missing/extra letter or one swap of neighbouring letters
 // ("shelvs" ~ "shelves", "zebar" ~ "zebra"). A changed letter never counts: "bread"/"break" are real words.
 function oneSlip(a, b) {
@@ -67,15 +69,18 @@ function oneSlip(a, b) {
   return s.slice(i) === l.slice(i + 1);
 }
 // Typo tolerance for "add" (normalized titles): same number of words, and each word that differs (at most 2)
-// is one slip of a word of 5+ letters that keeps its first letter. So "AI"/"UI", "Code"/"Node",
-// "Home ideas"/"Game ideas" and "Watch"/"Match" stay apart, while "QA Live Zebar" finds "QA Live Zebra".
+// is one slip of an all-letter word of 5+ letters that keeps its first letter. So "AI"/"UI", "Code"/"Node",
+// "Home ideas"/"Game ideas", "Watch"/"Match" and "Order 10243"/"Order 10234" stay apart, while "QA Live Zebar"
+// finds "QA Live Zebra".
+const LETTERS = /^\p{L}+$/u;
 function typoMatch(a, b) {
   const x = a.split(" "), y = b.split(" ");
   if (x.length !== y.length) return false;
   let diffs = 0;
   for (let i = 0; i < x.length; i++) {
     if (x[i] === y[i]) continue;
-    if (Math.min(x[i].length, y[i].length) < 5 || x[i][0] !== y[i][0] || !oneSlip(x[i], y[i])) return false;
+    if (Math.min(x[i].length, y[i].length) < 5 || !LETTERS.test(x[i]) || !LETTERS.test(y[i]) ||
+        x[i][0] !== y[i][0] || !oneSlip(x[i], y[i])) return false;
     diffs++;
   }
   return diffs > 0 && diffs <= 2;
@@ -210,9 +215,9 @@ function fuzzyFindPin(pins, wanted) {
     const pn = norm(p.title);
     if (!pn) return false;
     if (typoMatch(pn, wn)) return true;
-    // whole-word prefix, e.g. "Python" ~ "Python lists" (only for 4+ character titles)
+    // whole-word prefix, e.g. "Python" ~ "Python lists" (only when the shorter title has 4+ letters/digits)
     const [s, l] = pn.length <= wn.length ? [pn, wn] : [wn, pn];
-    return s.length >= 4 && l.startsWith(s + " ");
+    return s.replace(/ /g, "").length >= 4 && l.startsWith(s + " ");
   });
   if (close.length === 1) return { pin: close[0], matchType: "fuzzy" };
   if (close.length > 1) return { ambiguous: close };
