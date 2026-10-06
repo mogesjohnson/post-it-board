@@ -147,7 +147,7 @@ body:not(.can-edit) .editor-only { display: none !important; }
   background: linear-gradient(135deg, rgba(0,0,0,0) 50%, rgba(0,0,0,.08) 50%, rgba(255,255,255,.5) 100%);
 }
 .note .tack { position: absolute; top: 8px; left: 50%; margin-left: -9px; animation: tack-press .55s ease-out both; animation-delay: calc(var(--delay, 0s) + .35s); }
-.note h3 { margin: 0 0 8px; font-family: var(--marker); font-weight: 400; font-size: 24px; line-height: 1.15; word-break: break-word; }
+.note h3 { margin: 0 0 8px; font-family: var(--marker); font-weight: 400; font-size: 24px; line-height: 1.15; overflow-wrap: anywhere; }
 .note .meta { font-size: 16px; opacity: .7; }
 
 .paper-yellow { --paper: var(--paper-yellow); --pin: #e3342f; }
@@ -185,11 +185,12 @@ body:not(.selecting) .pick { display: none; }
 .empty .tack { position: absolute; top: 8px; left: 50%; margin-left: -9px; }
 
 /* ---------- opened pin ---------- */
-.pin-view { max-width: 760px; margin: 0 auto; }
-.pin-view-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.pin-view { max-width: 760px; margin: 0 auto; min-width: 0; }
+.pin-view-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; min-width: 0; }
 .pin-view-head h2 {
   margin: 0; padding: 4px 14px; font-family: var(--marker); font-weight: 400; font-size: 28px;
   background: var(--paper); box-shadow: 2px 3px 6px rgba(0,0,0,.25); transform: rotate(-1deg);
+  min-width: 0; max-width: 100%; overflow-wrap: anywhere; /* long unbroken titles wrap instead of widening the page */
 }
 .pin-view-head .spacer { flex: 1; }
 .page-strip { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 18px; padding: 0; list-style: none; }
@@ -197,7 +198,9 @@ body:not(.selecting) .pick { display: none; }
   position: relative; display: flex; align-items: center; gap: 6px;
   padding: 4px 12px; border: 0; cursor: pointer; font-size: 16px;
   background: rgba(255,255,255,.8); box-shadow: 1px 2px 4px rgba(0,0,0,.25); border-radius: 4px;
+  min-width: 0; max-width: 100%;
 }
+.page-chip span { min-width: 0; overflow-wrap: anywhere; }
 .page-chip.current { background: var(--paper); font-weight: 700; }
 .page-chip .pick { position: static; width: 18px; height: 18px; }
 
@@ -214,8 +217,8 @@ body:not(.selecting) .pick { display: none; }
 }
 .page-paper > .tack { position: absolute; top: 12px; left: 50%; margin-left: -9px; }
 .page-paper .page-no { position: absolute; top: 12px; right: 18px; font-size: 15px; opacity: .6; }
-.page-paper h3 { margin: 0; font-family: var(--marker); font-weight: 400; font-size: 26px; line-height: 32px; }
-.page-paper .body { white-space: pre-wrap; word-break: break-word; font-size: 21px; line-height: 32px; }
+.page-paper h3 { margin: 0; font-family: var(--marker); font-weight: 400; font-size: 26px; line-height: 32px; overflow-wrap: anywhere; }
+.page-paper .body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 21px; line-height: 32px; }
 .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; gap: 10px; }
 .pager .count { background: rgba(255,255,255,.85); padding: 2px 12px; border-radius: 8px; }
 

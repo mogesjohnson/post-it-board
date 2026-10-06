@@ -49,48 +49,93 @@
   /* Auth (Supabase Auth REST, email + password)                         */
   /* ------------------------------------------------------------------ */
   var SESSION_KEY = "postit.session.v1";
+  var EXPIRED = "Session expired — please sign in again.";
+  var OFFLINE = "Can't reach the board's database — check your connection.";
   var Auth = {
     session: null,
+    onExpired: null,   // set by the UI: called when a session is dropped because it expired (not on sign-out)
+    onChange: null,    // set by the UI: called when another tab signs in or out
+    _refreshing: null, // the one refresh in flight, shared by every request that needs it
+    _reported: false,  // signed-in state the UI last knew about (for the cross-tab storage event)
+    // Read the session from localStorage: another tab may have refreshed it or signed out.
     load: function () {
-      try { this.session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (e) { this.session = null; }
+      var raw;
+      try { raw = localStorage.getItem(SESSION_KEY); } catch (e) { return this.session; } // storage unavailable: keep ours
+      try { this.session = JSON.parse(raw || "null"); } catch (e) { this.session = null; }
       return this.session;
     },
     save: function (s) {
       if (s && !s.expires_at && s.expires_in) s.expires_at = Math.floor(Date.now() / 1000) + Number(s.expires_in);
       this.session = s;
+      this._reported = this.isSignedIn(); // this tab's own change: its UI already knows
       if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
       else localStorage.removeItem(SESSION_KEY);
     },
     isSignedIn: function () { return !!(this.session && this.session.access_token); },
     email: function () { return (this.session && this.session.user && this.session.user.email) || ""; },
     signIn: async function (email, password) {
-      var res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=password", {
-        method: "POST",
-        headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email, password: password }),
-      });
+      var res;
+      try {
+        res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=password", {
+          method: "POST",
+          headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email, password: password }),
+        });
+      } catch (e) { throw new Error(OFFLINE); }
       var data = await res.json().catch(function () { return {}; });
       if (!res.ok) throw new Error(data.error_description || data.msg || data.message || "Sign-in failed (" + res.status + ")");
       this.save(data);
       return data;
     },
-    refresh: async function () {
-      if (!this.session || !this.session.refresh_token) throw new Error("Not signed in");
-      var res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", {
-        method: "POST",
-        headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: this.session.refresh_token }),
-      });
+    // Resolves to a fresh session. `stale` is the access token a request was rejected with: if the session has
+    // moved on since (refreshed here or in another tab), that newer session is used without asking the server.
+    // Concurrent callers share one request, because a refresh token only works once.
+    refresh: function (stale) {
+      var self = this;
+      if (this._refreshing) return this._refreshing;
+      this.load();
+      if (!this.session || !this.session.refresh_token) return Promise.reject(new Error(EXPIRED));
+      if (stale && this.session.access_token !== stale) return Promise.resolve(this.session);
+      this._refreshing = this._refresh().finally(function () { self._refreshing = null; });
+      return this._refreshing;
+    },
+    _refresh: async function () {
+      var sent = this.session.refresh_token, res;
+      try {
+        res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", {
+          method: "POST",
+          headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: sent }),
+          // every request waits on this one refresh, so it must not hang forever
+          signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined,
+        });
+      } catch (e) { throw new Error(OFFLINE); }                               // network blip: keep the session
       var data = await res.json().catch(function () { return {}; });
-      if (!res.ok) { this.save(null); throw new Error("Session expired — please sign in again."); }
+      // Signed out, or another tab refreshed, while we waited: never overwrite or drop that newer state.
+      this.load();
+      if (!this.session || this.session.refresh_token !== sent) {
+        if (this.isSignedIn()) return this.session;
+        throw new Error(EXPIRED);
+      }
+      if (res.status === 400 || res.status === 401 || res.status === 403) { this.expire(); throw new Error(EXPIRED); } // token rejected
+      if (!res.ok || !data.access_token) throw new Error("Couldn't refresh the session (" + res.status + ")."); // 429/5xx: keep it
       this.save(data);
       return data;
     },
+    // Drop a session the server no longer accepts and tell the UI.
+    expire: function () {
+      if (!this.session) return;
+      this.save(null);
+      if (typeof this.onExpired === "function") {
+        try { this.onExpired(); } catch (e) { console.error(e); }
+      }
+    },
     // Returns a usable access token (refreshing if it expires within 60s), or null.
     token: async function () {
+      this.load();
       if (!this.isSignedIn()) return null;
       var exp = Number(this.session.expires_at || 0);
-      if (exp && exp - 60 < Date.now() / 1000) await this.refresh();
+      if (exp && exp - 60 < Date.now() / 1000) return (await this.refresh()).access_token;
       return this.session.access_token;
     },
     signOut: async function () {
@@ -111,30 +156,49 @@
   /* ------------------------------------------------------------------ */
   function SupabaseStore() { this.mode = "supabase"; }
 
-  SupabaseStore.prototype.req = async function (method, path, body, isRetry) {
-    var token = await Auth.token().catch(function () { return null; });
+  // attempt: undefined = first try, "refreshed" = after a token refresh,
+  // "anon" = a read retried with the public key after the session failed.
+  SupabaseStore.prototype.req = async function (method, path, body, attempt) {
+    var write = method !== "GET";
+    var token = null;
+    if (attempt !== "anon") {
+      try { token = await Auth.token(); }
+      catch (e) { if (write) throw e; } // reads fall back to the public anon key
+    }
+    if (write && !token) throw new Error(EXPIRED); // session gone (e.g. while a form was open): don't send it anonymously
     var headers = {
       apikey: ANON_KEY,
       Authorization: "Bearer " + (token || ANON_KEY),
       "Content-Type": "application/json",
     };
-    if (method !== "GET") headers.Prefer = "return=representation";
-    var res = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
-      method: method, headers: headers, body: body ? JSON.stringify(body) : undefined,
-    });
-    if (res.status === 401 && token && !isRetry) {
-      await Auth.refresh();
-      return this.req(method, path, body, true);
+    if (write) headers.Prefer = "return=representation";
+    var res;
+    try {
+      res = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
+        method: method, headers: headers, body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (e) {
+      throw new Error(OFFLINE);
     }
+    if (res.status === 401 && token && !attempt) {
+      var next = "refreshed";
+      try { await Auth.refresh(token); }
+      catch (e) { if (write) throw e; next = "anon"; }
+      return this.req(method, path, body, next);
+    }
+    // The board is public: a session the database still rejects must never hide it.
+    if (!write && token && (res.status === 401 || res.status === 403)) return this.req(method, path, body, "anon");
     var text = await res.text();
-    var data = text ? JSON.parse(text) : null;
+    var data = null, parsed = !text;
+    try { if (text) { data = JSON.parse(text); parsed = true; } } catch (e) { /* not JSON, e.g. a proxy error page */ }
     if (!res.ok) {
-      var msg = (data && (data.message || data.hint)) || res.statusText;
-      if (res.status === 401 || res.status === 403 || /row-level security/i.test(msg)) {
+      var msg = (data && (data.message || data.hint)) || "Server error (" + res.status + (res.statusText ? " " + res.statusText : "") + ")";
+      if (write && (res.status === 401 || res.status === 403 || /row-level security/i.test(msg))) {
         msg = "Not allowed — sign in as the board owner to make changes.";
       }
       throw new Error(msg);
     }
+    if (!parsed) throw new Error("Unexpected response from the server (" + res.status + ").");
     return data;
   };
   function enc(v) { return encodeURIComponent(v); }
@@ -279,7 +343,19 @@
   };
 
   /* ------------------------------------------------------------------ */
-  if (configured) Auth.load();
+  if (configured) {
+    Auth.load();
+    Auth._reported = Auth.isSignedIn();
+    // Another tab signed in or out: follow it.
+    window.addEventListener("storage", function (e) {
+      if (e.key !== SESSION_KEY && e.key !== null) return;
+      // Compare with what the UI was last told, not Auth.session: token() may already have loaded the change.
+      Auth.load();
+      if (Auth._reported === Auth.isSignedIn()) return;
+      Auth._reported = Auth.isSignedIn();
+      if (typeof Auth.onChange === "function") Auth.onChange();
+    });
+  }
   window.PostItStore = configured ? new SupabaseStore() : new LocalStore();
   window.PostItAuth = Auth;
   window.PostItUtil = { todayStr: todayStr };

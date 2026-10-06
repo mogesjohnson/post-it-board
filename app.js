@@ -18,6 +18,8 @@
     selPages: new Set(),
     freshIds: new Set(), // ids to animate as "just pinned"
     animateAll: true,    // drop-in animation for every note (first load / day change)
+    focusNext: null,     // data-focus key to focus after the next render (view changes)
+    ready: false,        // first load finished (until then start() owns rendering)
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -45,7 +47,8 @@
   function fmtDate(s) {
     var p = String(s).split("-").map(Number);
     var d = new Date(p[0], p[1] - 1, p[2]);
-    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    var narrow = window.matchMedia && window.matchMedia("(max-width: 640px)").matches; // phones: drop the weekday
+    return d.toLocaleDateString(undefined, { weekday: narrow ? undefined : "short", month: "short", day: "numeric", year: "numeric" });
   }
   function canEdit() { return store.mode === "local" || Auth.isSignedIn(); }
   var toastTimer;
@@ -80,19 +83,29 @@
   async function loadPins() {
     state.pins = state.dayId ? await store.listPins(state.dayId) : [];
   }
-  async function openPin(pinId, pageIdx) {
-    state.pinId = pinId;
-    state.pages = await store.listPages(pinId);
-    state.pageIdx = Math.max(0, Math.min(pageIdx || 0, state.pages.length - 1));
-    state.selPages.clear();
+  // Every navigation bumps this, so a slow page load can't open a pin after the user has moved on.
+  var navSeq = 0;
+  // Selections only ever cover what the current view shows: pins on the board, pages in a pin.
+  // The pages load first, so a failed load leaves the current view untouched.
+  async function openPin(pinId, pageIdx, focusKey) {
+    var seq = ++navSeq;
+    var pages = await store.listPages(pinId);
+    if (seq !== navSeq) return;
+    state.pinId = pinId; state.pages = pages;
+    state.pageIdx = Math.max(0, Math.min(pageIdx || 0, pages.length - 1));
+    state.selPins.clear(); state.selPages.clear();
+    if (focusKey) state.focusNext = focusKey;
     render();
   }
   function closePin() {
+    navSeq++;
+    if (state.pinId) state.focusNext = "note:" + state.pinId; // back to the note we came from
     state.animateAll = true;
     state.pinId = null; state.pages = []; state.pageIdx = 0; state.selPages.clear();
     render();
   }
   async function goDay(dayId) {
+    navSeq++;
     state.dayId = dayId; state.pinId = null; state.pages = []; state.animateAll = true;
     state.selPins.clear(); state.selPages.clear();
     await loadPins();
@@ -101,6 +114,11 @@
 
   /* ---------- rendering ---------- */
   function render() {
+    // Re-rendering replaces the view, so remember which control had focus and restore it afterwards.
+    var a = document.activeElement;
+    var viewChange = !!state.focusNext; // opening or closing a pin: the focused control may be far down the page
+    var focusKey = state.focusNext || (a && view.contains(a) ? a.getAttribute("data-focus") : null);
+    state.focusNext = null;
     document.body.classList.toggle("can-edit", canEdit());
     if (!canEdit() && state.selecting) setSelecting(false);
     document.body.classList.toggle("selecting", state.selecting);
@@ -108,6 +126,31 @@
     view.textContent = "";
     view.appendChild(state.pinId ? renderPinView() : renderBoard());
     writeHash();
+    restoreFocus(focusKey, viewChange);
+  }
+  // A pager button can become disabled at either end, so fall back to its partner, then "← All pins".
+  // A selection checkbox is hidden when select mode ends, so fall back to its note or page chip.
+  function focusCandidates(key) {
+    if (key === "next") return ["next", "prev", "back"];
+    if (key === "prev") return ["prev", "next", "back"];
+    if (key.indexOf("pick-pin:") === 0) return [key, "note:" + key.slice(9)];
+    if (key.indexOf("pick-page:") === 0) return [key, "chip:" + key.slice(10)];
+    return [key];
+  }
+  function restoreFocus(key, scroll) {
+    if (!key) return;
+    var keys = focusCandidates(key);
+    var nodes = view.querySelectorAll("[data-focus]");
+    for (var k = 0; k < keys.length; k++) {
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (n.getAttribute("data-focus") !== keys[k] || n.disabled) continue;
+        n.focus({ preventScroll: true });
+        if (document.activeElement !== n) continue; // hidden (display:none) controls can't take focus
+        if (scroll) n.scrollIntoView({ block: "nearest" });
+        return;
+      }
+    }
   }
 
   function renderHeader() {
@@ -148,20 +191,20 @@
       var still = !fresh && !state.animateAll;
       var note = el("li", {
         class: "note paper-" + colorOf(pin) + (selected ? " selected" : "") + (still ? " still" : ""),
-        tabindex: "0", role: "button",
+        tabindex: "0", role: "button", "data-focus": "note:" + pin.id,
         "aria-label": "Open pin " + pin.title,
         style: "--r:" + tilt(pin.id) + ";--delay:" + (fresh ? 0 : Math.min(i * 0.07, 0.6)) + "s",
         onclick: function (e) {
           if (e.target.classList.contains("pick")) return;
           if (state.selecting) toggleSel(state.selPins, pin.id);
-          else openPin(pin.id, 0).catch(fail);
+          else openPin(pin.id, 0, "back").catch(fail);
         },
         onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
         onanimationend: function (e) { if (e.target === e.currentTarget) e.currentTarget.style.animation = "none"; },
       }, [
         tack(),
         el("input", { type: "checkbox", class: "pick", "aria-label": "Select pin " + pin.title, checked: selected,
-          onchange: function () { toggleSel(state.selPins, pin.id); } }),
+          "data-focus": "pick-pin:" + pin.id, onchange: function () { toggleSel(state.selPins, pin.id); } }),
         el("h3", { text: pin.title }),
         el("div", { class: "meta", text: pin.page_count + (pin.page_count === 1 ? " page" : " pages") }),
       ]);
@@ -178,7 +221,7 @@
     var wrap = el("section", { class: "pin-view paper-" + color });
 
     var head = el("div", { class: "pin-view-head" }, [
-      el("button", { class: "chip-btn", text: "← All pins", onclick: closePin }),
+      el("button", { class: "chip-btn", text: "← All pins", "data-focus": "back", onclick: closePin }),
       el("h2", { text: pin.title }),
       el("span", { class: "spacer" }),
       canEdit() ? el("button", { class: "chip-btn", text: "✎ Rename pin", onclick: renamePin }) : null,
@@ -193,16 +236,16 @@
       var selected = state.selPages.has(pg.id);
       strip.appendChild(el("li", {
         class: "page-chip" + (i === state.pageIdx ? " current" : "") + (selected ? " selected" : ""),
-        role: "button", tabindex: "0",
+        role: "button", tabindex: "0", "data-focus": "chip:" + pg.id,
         onclick: function (e) {
           if (e.target.classList.contains("pick")) return;
           if (state.selecting) toggleSel(state.selPages, pg.id);
           else { state.pageIdx = i; render(); }
         },
-        onkeydown: function (e) { if (e.key === "Enter") e.currentTarget.click(); },
+        onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
       }, [
         el("input", { type: "checkbox", class: "pick", "aria-label": "Select page " + (i + 1), checked: selected,
-          onchange: function () { toggleSel(state.selPages, pg.id); } }),
+          "data-focus": "pick-page:" + pg.id, onchange: function () { toggleSel(state.selPages, pg.id); } }),
         el("span", { text: (i + 1) + (pg.title ? " · " + pg.title : "") }),
       ]));
     });
@@ -217,10 +260,10 @@
     ]));
 
     wrap.appendChild(el("div", { class: "pager" }, [
-      el("button", { class: "chip-btn", text: "‹ Prev page", disabled: state.pageIdx === 0,
+      el("button", { class: "chip-btn", text: "‹ Prev page", disabled: state.pageIdx === 0, "data-focus": "prev",
         onclick: function () { state.pageIdx--; render(); } }),
       el("span", { class: "count", text: (state.pageIdx + 1) + " / " + state.pages.length }),
-      el("button", { class: "chip-btn", text: "Next page ›", disabled: state.pageIdx >= state.pages.length - 1,
+      el("button", { class: "chip-btn", text: "Next page ›", disabled: state.pageIdx >= state.pages.length - 1, "data-focus": "next",
         onclick: function () { state.pageIdx++; render(); } }),
     ]));
     return wrap;
@@ -395,9 +438,30 @@
   async function route() {
     var h = readHash();
     var day = h.day && state.days.find(function (d) { return d.board_date === h.day; });
-    if (day && day.id !== state.dayId) { state.dayId = day.id; await loadPins(); }
+    if (day && day.id !== state.dayId) { navSeq++; state.dayId = day.id; state.selPins.clear(); await loadPins(); }
     if (h.pin && state.pins.some(function (p) { return p.id === h.pin; })) await openPin(h.pin, h.page - 1);
-    else { state.pinId = null; state.pages = []; render(); }
+    else { navSeq++; state.pinId = null; state.pages = []; state.selPages.clear(); render(); }
+  }
+
+  // The store drops a session the server no longer accepts; switch to the read-only view and say why.
+  Auth.onExpired = function () {
+    setSelecting(false);
+    if (state.ready) render();
+    else document.body.classList.toggle("can-edit", canEdit()); // first load still running; start() renders the board
+    toast("Signed out — your session expired. The board is read-only.");
+  };
+  // Another tab signed in or out.
+  Auth.onChange = function () {
+    if (!state.ready) return;
+    render();
+    toast(Auth.isSignedIn() ? "Signed in as " + Auth.email() : "Signed out in another tab — read-only view.");
+  };
+  // Phones drop the weekday from the day picker (see fmtDate); relabel when the width crosses that line.
+  if (window.matchMedia) {
+    var narrowQuery = window.matchMedia("(max-width: 640px)");
+    var relabel = function () { if (state.ready) renderHeader(); };
+    if (narrowQuery.addEventListener) narrowQuery.addEventListener("change", relabel);
+    else if (narrowQuery.addListener) narrowQuery.addListener(relabel);
   }
 
   async function start() {
@@ -413,6 +477,7 @@
       view.textContent = "";
       view.appendChild(emptyCard("Couldn’t load the board", e.message || String(e)));
     }
+    state.ready = true;
   }
   start();
 })();
