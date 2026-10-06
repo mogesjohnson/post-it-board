@@ -1,0 +1,21 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-05",
+    "pin": "QA Live Zebra",
+    "title": "Only title B"
+  },
+  "matched": {
+    "dayId": "e21320af-8335-4053-8a48-4cbe38365258",
+    "pinId": "a9acdf3a-cfa8-4dae-b2d9-d5b80c99c387",
+    "pageId": "41dcd98d-15e1-496d-8c35-b4be070160f7",
+    "pinTitle": "QA Live Zebra"
+  },
+  "message": "using pin \"QA Live Zebra\"; added page 5 \"Only title B\".",
+  "processedAt": "2026-10-06T17:56:46.979Z",
+  "matchType": "exact",
+  "pageNumber": 5,
+  "date": "2026-10-05"
+}
