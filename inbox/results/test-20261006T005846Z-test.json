@@ -1,0 +1,21 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "pin": "how-to-post-it test",
+    "title": "Test from send-test-command.sh",
+    "body": "Temporary test note. Safe to delete."
+  },
+  "matched": {
+    "dayId": "e21320af-8335-4053-8a48-4cbe38365258",
+    "pinId": "fca1c001-6089-4333-9605-be6f60efcdfc",
+    "pageId": "e544a3b7-144f-462d-b528-28bb75da4c5b",
+    "pinTitle": "how-to-post-it test"
+  },
+  "message": "created pin \"how-to-post-it test\"; added page 1 \"Test from send-test-command.sh\".",
+  "processedAt": "2026-10-06T00:59:01.819Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-05"
+}
