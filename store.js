@@ -49,8 +49,10 @@
   /* Auth (Supabase Auth REST, email + password)                         */
   /* ------------------------------------------------------------------ */
   var SESSION_KEY = "postit.session.v1";
+  var EXPIRED = "Session expired — please sign in again.";
   var Auth = {
     session: null,
+    onExpired: null, // set by the UI: called when a session is dropped because it expired (not on sign-out)
     load: function () {
       try { this.session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (e) { this.session = null; }
       return this.session;
@@ -82,9 +84,18 @@
         body: JSON.stringify({ refresh_token: this.session.refresh_token }),
       });
       var data = await res.json().catch(function () { return {}; });
-      if (!res.ok) { this.save(null); throw new Error("Session expired — please sign in again."); }
+      if (res.status >= 400 && res.status < 500) { this.expire(); throw new Error(EXPIRED); } // refresh token rejected
+      if (!res.ok) throw new Error("Couldn't refresh the session (" + res.status + ").");     // auth server trouble: keep it
       this.save(data);
       return data;
+    },
+    // Drop a session the server no longer accepts and tell the UI.
+    expire: function () {
+      if (!this.session) return;
+      this.save(null);
+      if (typeof this.onExpired === "function") {
+        try { this.onExpired(); } catch (e) { console.error(e); }
+      }
     },
     // Returns a usable access token (refreshing if it expires within 60s), or null.
     token: async function () {
@@ -111,30 +122,45 @@
   /* ------------------------------------------------------------------ */
   function SupabaseStore() { this.mode = "supabase"; }
 
-  SupabaseStore.prototype.req = async function (method, path, body, isRetry) {
-    var token = await Auth.token().catch(function () { return null; });
+  // attempt: undefined = first try, "refreshed" = after a token refresh,
+  // "anon" = a read retried with the public key after the session failed.
+  SupabaseStore.prototype.req = async function (method, path, body, attempt) {
+    var token = null;
+    if (attempt !== "anon") {
+      try { token = await Auth.token(); }
+      catch (e) { if (method !== "GET") throw e; } // reads fall back to the public anon key
+    }
     var headers = {
       apikey: ANON_KEY,
       Authorization: "Bearer " + (token || ANON_KEY),
       "Content-Type": "application/json",
     };
     if (method !== "GET") headers.Prefer = "return=representation";
-    var res = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
-      method: method, headers: headers, body: body ? JSON.stringify(body) : undefined,
-    });
-    if (res.status === 401 && token && !isRetry) {
-      await Auth.refresh();
-      return this.req(method, path, body, true);
+    var res;
+    try {
+      res = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
+        method: method, headers: headers, body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (e) {
+      throw new Error("Can't reach the board's database — check your connection.");
+    }
+    if (res.status === 401 && token && !attempt) {
+      var refreshed = true;
+      try { await Auth.refresh(); }
+      catch (e) { if (method !== "GET") throw e; refreshed = false; }
+      return this.req(method, path, body, refreshed ? "refreshed" : "anon");
     }
     var text = await res.text();
-    var data = text ? JSON.parse(text) : null;
+    var data = null, parsed = !text;
+    try { if (text) { data = JSON.parse(text); parsed = true; } } catch (e) { /* not JSON, e.g. a proxy error page */ }
     if (!res.ok) {
-      var msg = (data && (data.message || data.hint)) || res.statusText;
+      var msg = (data && (data.message || data.hint)) || "Server error (" + res.status + (res.statusText ? " " + res.statusText : "") + ")";
       if (res.status === 401 || res.status === 403 || /row-level security/i.test(msg)) {
         msg = "Not allowed — sign in as the board owner to make changes.";
       }
       throw new Error(msg);
     }
+    if (!parsed) throw new Error("Unexpected response from the server (" + res.status + ").");
     return data;
   };
   function enc(v) { return encodeURIComponent(v); }

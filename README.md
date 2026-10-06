@@ -55,6 +55,7 @@ Links are shareable via the URL hash, e.g. `#day=2026-10-05&pin=<id>&page=2`.
 | `scripts/post.mjs` | command-line poster the bot uses (quick add + JSON command files) |
 | `.github/workflows/inbox.yml` | applies JSON commands pushed to the `inbox` branch |
 | `scripts/write-config.mjs` | writes `config.js` from env vars |
+| `tests/` | offline tests for `post.mjs` and the inbox workflow step (`node tests/run.mjs`, `bash tests/workflow.sh`) |
 | `.nojekyll` | tells GitHub Pages to serve files as-is |
 
 ## Demo mode
@@ -157,14 +158,25 @@ Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohns
  "target": "pin"|"page" /* edit/delete */, "page": "page title" | "pageNumber": 2, "newPin": "new pin title"}
 ```
 
-- **add** matches the pin loosely on that day: case, spaces and punctuation are ignored, small typos are
-  allowed, and a whole-word prefix counts. With no match it creates the pin. With several possible
-  matches it writes nothing (`skipped_ambiguous`). If the same text was added to that pin in the last
-  10 minutes, it skips it (`skipped_duplicate`).
+- **add** matches the pin loosely on that day:
+  - case, spaces, accents and punctuation are ignored ("postit board" finds "Post-it Board");
+  - a small typo in a longer word is allowed: one missing, extra or swapped letter in a word of 5+ letters
+    that keeps its first letter ("QA Live Zebar" finds "QA Live Zebra", "AI agent" finds "AI agents"). A
+    *changed* letter never counts, and short words must match exactly, so "Code"/"Node", "Cars"/"Cats",
+    "Bread"/"Break" and "AI"/"UI" stay separate pins;
+  - a whole-word prefix counts ("Python lists" finds "Python") when the shorter title has 4+ letters;
+  - titles with no letters or digits (e.g. "🚗") must match exactly.
+
+  With no match it creates the pin. With several possible matches it writes nothing (`skipped_ambiguous`).
+  If a page with the same title **and** text was added to that pin in the last 10 minutes, it skips it
+  (`skipped_duplicate`, with that page's `pageNumber`).
 - **edit/delete** need an exact pin title (case-insensitive) and an exact page title or `pageNumber`.
   They never guess (`skipped_not_found` / `skipped_ambiguous`). Deleting a pin deletes its pages.
 - Statuses: `ok`, `skipped_duplicate`, `skipped_ambiguous`, `skipped_not_found`, `error_invalid` (exit 0,
   command removed) and `error` (real failure: exit 1, command kept so a re-run retries it).
+- If the workflow can't push the results back to `inbox` (5 attempts), the run **fails** with an error that
+  names the commands. They were already applied but are still waiting in `inbox/`, so check the board
+  before re-running, or delete those command files.
 
 Examples:
 ```json

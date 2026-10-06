@@ -87,11 +87,22 @@ jobs:
             echo "Nothing to commit."
           else
             git commit -q -m "inbox: processed ${names[*]} [skip ci]"
+            pushed=0
             for attempt in 1 2 3 4 5; do
-              if git push -q origin HEAD:inbox; then break; fi
+              if git push -q origin HEAD:inbox; then pushed=1; break; fi
               echo "Push rejected (attempt $attempt); rebasing on latest inbox…"
-              git pull -q --rebase origin inbox || { git rebase --abort; sleep 3; }
+              if ! git pull -q --rebase origin inbox; then
+                echo "::warning::Rebase onto the latest inbox failed (attempt $attempt); retrying."
+                git rebase --abort 2>/dev/null || true
+                sleep 3
+              fi
               sleep $attempt
             done
+            if [ $pushed -ne 1 ]; then
+              # The board was already changed, but the command files are still on the branch: a re-run would
+              # apply them again. Fail loudly so someone checks the board before re-running.
+              echo "::error::Could not push results to the inbox branch after 5 attempts. These commands WERE applied to the board but are still waiting in inbox/, so a re-run would apply them again: ${names[*]}"
+              exit 1
+            fi
           fi
           exit $failed
