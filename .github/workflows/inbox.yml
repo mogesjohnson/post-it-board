@@ -51,6 +51,8 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_OWNER_EMAIL: ${{ secrets.SUPABASE_OWNER_EMAIL }}
           SUPABASE_OWNER_PASSWORD: ${{ secrets.SUPABASE_OWNER_PASSWORD }}
+        # GitHub runs this as `bash -e {0}`: every command that may fail on purpose is guarded below, so one
+        # failed command never stops the loop (that would drop the results of the commands already applied).
         run: |
           set -uo pipefail
           shopt -s nullglob
@@ -60,24 +62,26 @@ jobs:
             exit 0
           fi
           mkdir -p inbox/results
-          names=(); failed=0
+          names=(); applied=(); failed=0
           echo "| file | status | message |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
           for f in "${files[@]}"; do
             [ -f "$f" ] || continue
             name="$(basename "$f")"
             result="inbox/results/$name"
-            node ../main-branch/scripts/post.mjs --command-file "$f" --result-file "$result" > /dev/null
-            code=$?
+            code=0
+            node ../main-branch/scripts/post.mjs --command-file "$f" --result-file "$result" > /dev/null || code=$?
             status="$(node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(r.status+"\t"+String(r.message).replace(/[|\n]/g," "))' "$result" 2>/dev/null || printf 'error\tno result written')"
             echo "$name -> ${status%%$'\t'*}"
             echo "| $name | ${status%%$'\t'*} | ${status#*$'\t'} |" >> "$GITHUB_STEP_SUMMARY"
             git add -- "$result" 2>/dev/null || true
             if [ $code -eq 0 ]; then
-              git rm -q -- "$f"            # handled or skipped: remove the command
+              # handled or skipped: remove the command
+              git rm -q -- "$f" || { echo "::warning::Could not remove $f; it would be applied again."; failed=1; }
             else
               failed=1                     # real failure: keep the command so a re-run can retry it
             fi
+            if [ "${status%%$'\t'*}" = ok ]; then applied+=("$name"); fi   # these changed the board
             names+=("$name")
           done
 
@@ -87,11 +91,23 @@ jobs:
             echo "Nothing to commit."
           else
             git commit -q -m "inbox: processed ${names[*]} [skip ci]"
+            pushed=0
             for attempt in 1 2 3 4 5; do
-              if git push -q origin HEAD:inbox; then break; fi
+              if git push -q origin HEAD:inbox; then pushed=1; break; fi
+              [ $attempt -lt 5 ] || break
               echo "Push rejected (attempt $attempt); rebasing on latest inbox…"
-              git pull -q --rebase origin inbox || { git rebase --abort; sleep 3; }
+              if ! git pull -q --rebase origin inbox; then
+                echo "::warning::Rebase onto the latest inbox failed (attempt $attempt); retrying."
+                git rebase --abort 2>/dev/null || true
+                sleep 3
+              fi
               sleep $attempt
             done
+            if [ $pushed -ne 1 ]; then
+              # The board was already changed, but these command files are still on the branch: a re-run would
+              # apply them again. Fail loudly so someone checks the board before re-running.
+              echo "::error::Could not push results to the inbox branch after 5 attempts. These commands changed the board but are still waiting in inbox/, so a re-run would apply them again (delete these command files before re-running): ${applied[*]:-none}. The other command files did not change the board."
+              exit 1
+            fi
           fi
           exit $failed

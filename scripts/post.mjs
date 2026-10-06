@@ -46,30 +46,49 @@ function isValidDate(s) {
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
-// "Post-it  Board!" -> "postit board" (case, accents, punctuation, extra spaces ignored; keeps + and #)
+// "Post-it  Board!" -> "postit board" (case, Latin accents, punctuation, extra spaces ignored; keeps + and #).
+// Only Latin combining accents are dropped: vowel signs of other scripts carry meaning ("\u0915\u093e\u0932" is not "\u0915\u0932").
 function norm(s) {
-  return String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-    .replace(/[^\p{L}\p{N}\s+#]/gu, "").replace(/\s+/g, " ").trim();
+  // Variation selectors (the U+FE0F in "\u2764\ufe0f") and enclosing marks (keycaps) are marks too, but only change how an
+  // emoji looks: drop them, or every emoji title would normalize to the same leftover selector.
+  return String(s).normalize("NFKD").replace(/[\u0300-\u036f\ufe00-\ufe0f\u{e0100}-\u{e01ef}\p{Me}]/gu, "").toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\s+#]/gu, "").replace(/\s+/g, " ").trim();
 }
 const squash = s => norm(s).replace(/ /g, "");                 // also ignore spaces
-const exactCI = s => String(s).trim().replace(/\s+/g, " ").toLowerCase(); // edit/delete matching
-// Edit distance (optimal string alignment: insert/delete/substitute/swap neighbours = 1 each)
-function levenshtein(a, b) {
-  if (a === b) return 0;
-  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0][j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
-    }
+// edit/delete matching (and add, for titles without letters/digits); emoji variation selectors are ignored (\u2764\ufe0f = \u2764)
+const exactCI = s => String(s).replace(/[\ufe0e\ufe0f]/g, "").trim().replace(/\s+/g, " ").toLowerCase();
+// One slip: a and b differ by exactly one missing/extra letter or one swap of neighbouring letters
+// ("shelvs" ~ "shelves", "zebar" ~ "zebra"). A changed letter never counts: "bread"/"break" are real words.
+function oneSlip(a, b) {
+  if (a === b || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  if (a.length === b.length) {
+    while (a[i] === b[i]) i++;
+    return a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2);
   }
-  return d[a.length][b.length];
+  const [s, l] = a.length < b.length ? [a, b] : [b, a];
+  while (i < s.length && s[i] === l[i]) i++;
+  return s.slice(i) === l.slice(i + 1);
 }
-// Allowed typo distance depends on the length of the shorter title, so "AI" never merges into "UI".
-function maxTypos(len) { return len <= 3 ? 0 : len <= 6 ? 1 : 2; }
-function sameBody(a, b) {
+// Typo tolerance for "add" (normalized titles): same number of words, and each word that differs (at most 2)
+// is one slip of an all-letter word of 5+ letters that keeps its first letter. So "AI"/"UI", "Code"/"Node",
+// "Home ideas"/"Game ideas", "Watch"/"Match" and "Order 10243"/"Order 10234" stay apart, while "QA Live Zebar"
+// finds "QA Live Zebra".
+const LETTERS = /^\p{L}+$/u;
+function typoMatch(a, b) {
+  const x = a.split(" "), y = b.split(" ");
+  if (x.length !== y.length) return false;
+  let diffs = 0;
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] === y[i]) continue;
+    if (Math.min(x[i].length, y[i].length) < 5 || !LETTERS.test(x[i]) || !LETTERS.test(y[i]) ||
+        x[i][0] !== y[i][0] || !oneSlip(x[i], y[i])) return false;
+    diffs++;
+  }
+  return diffs > 0 && diffs <= 2;
+}
+// Same text, ignoring line-ending style and surrounding whitespace (null, "" and "  " are all equal)
+function sameText(a, b) {
   const n = s => String(s ?? "").replace(/\r\n?/g, "\n").trim();
   return n(a) === n(b);
 }
@@ -189,18 +208,18 @@ function validate(raw) {
 // Fuzzy pin lookup for "add": returns {pin, matchType} | {ambiguous:[...]} | {} (no match)
 function fuzzyFindPin(pins, wanted) {
   const wk = squash(wanted), wn = norm(wanted);
-  if (!wk) return {};
-  const exact = pins.filter(p => squash(p.title) === wk);
+  // Emoji/punctuation-only titles ("🚗", "!!!") normalize to nothing: fall back to the exact title.
+  const exact = wk ? pins.filter(p => squash(p.title) === wk) : pins.filter(p => exactCI(p.title) === exactCI(wanted));
   if (exact.length === 1) return { pin: exact[0], matchType: "exact" };
   if (exact.length > 1) return { ambiguous: exact };
+  if (!wk) return {};
   const close = pins.filter(p => {
-    const pk = squash(p.title), pn = norm(p.title);
-    if (!pk) return false;
-    const shorter = Math.min(pk.length, wk.length);
-    if (levenshtein(pk, wk) <= maxTypos(shorter)) return true;
-    // whole-word prefix, e.g. "Python" ~ "Python lists" (only for 4+ character titles)
+    const pn = norm(p.title);
+    if (!pn) return false;
+    if (typoMatch(pn, wn)) return true;
+    // whole-word prefix, e.g. "Python" ~ "Python lists" (only when the shorter title has 4+ letters/digits)
     const [s, l] = pn.length <= wn.length ? [pn, wn] : [wn, pn];
-    return s.length >= 4 && l.startsWith(s + " ");
+    return s.replace(/[^\p{L}\p{N}]/gu, "").length >= 4 && l.startsWith(s + " ");
   });
   if (close.length === 1) return { pin: close[0], matchType: "fuzzy" };
   if (close.length > 1) return { ambiguous: close };
@@ -226,12 +245,13 @@ async function runCommand(cmd, api, dry) {
     let pin = found.pin, pages = [];
     if (pin) {
       matched.pinId = pin.id; matched.pinTitle = pin.title;
-      pages = await rest("GET", `pages?select=id,title,body,position,created_at&pin_id=eq.${enc(pin.id)}`);
+      pages = (await rest("GET", `pages?select=id,title,body,position,created_at&pin_id=eq.${enc(pin.id)}`)).sort(byPosition);
       const cutoff = Date.now() - DEDUP_MINUTES * 60 * 1000;
-      const dup = pages.find(pg => sameBody(pg.body, cmd.body) && Date.parse(pg.created_at) >= cutoff);
+      const dup = pages.find(pg => sameText(pg.body, cmd.body) && sameText(pg.title, cmd.title) && Date.parse(pg.created_at) >= cutoff);
       if (dup) {
         matched.pageId = dup.id;
-        return out("skipped_duplicate", `The same text was already added to "${pin.title}" in the last ${DEDUP_MINUTES} minutes.`);
+        return out("skipped_duplicate", `The same page (title and text) was already added to "${pin.title}" in the last ${DEDUP_MINUTES} minutes.`,
+          { matchType: found.matchType, pageNumber: pages.indexOf(dup) + 1 });
       }
     }
     const notes = [];
@@ -252,11 +272,12 @@ async function runCommand(cmd, api, dry) {
       notes.push(`${found.matchType === "fuzzy" ? "matched existing pin" : "using pin"} "${pin.title}"`);
     }
     const position = pages.reduce((m, p) => Math.max(m, (p.position ?? 0) + 1), 0);
+    const pageNumber = pages.length + 1; // positions can have gaps after deletes; the number is the place in order
     const page = dry ? { id: "(new-page)" } :
       (await rest("POST", "pages", { pin_id: pin.id, title: cmd.title?.trim() || null, body: cmd.body ?? "", position }))[0];
     matched.pageId = page.id;
-    notes.push(`added page ${position + 1}${cmd.title?.trim() ? ` "${cmd.title.trim()}"` : ""}`);
-    return out("ok", notes.join("; ") + ".", { matchType: found.matchType || "new", pageNumber: position + 1 });
+    notes.push(`added page ${pageNumber}${cmd.title?.trim() ? ` "${cmd.title.trim()}"` : ""}`);
+    return out("ok", notes.join("; ") + ".", { matchType: found.matchType || "new", pageNumber });
   }
 
   /* ----- edit / delete: exact matches only, never guess ----- */
@@ -386,10 +407,10 @@ async function cliMode(args) {
   const pages = pin.id === "(new-pin)" ? [] :
     await rest("GET", `pages?select=id,position&pin_id=eq.${enc(pin.id)}`);
   const position = pages.reduce((m, p) => Math.max(m, (p.position ?? 0) + 1), 0);
-  log(`Appending page ${position + 1}${pageTitle ? ` "${pageTitle}"` : ""}`);
+  log(`Appending page ${pages.length + 1}${pageTitle ? ` "${pageTitle}"` : ""}`);
   const page = dry ? { id: "(new-page)" } :
     (await rest("POST", "pages", { pin_id: pin.id, title: pageTitle, body, position }))[0];
-  console.log(JSON.stringify({ ok: true, dry_run: dry, date, day_id: day.id, pin_id: pin.id, page_id: page.id, page_number: position + 1 }));
+  console.log(JSON.stringify({ ok: true, dry_run: dry, date, day_id: day.id, pin_id: pin.id, page_id: page.id, page_number: pages.length + 1 }));
   return 0;
 }
 
@@ -420,5 +441,7 @@ async function main() {
   return cliMode(args);
 }
 
-main().then(code => process.exit(code ?? 0), err => { console.error(`Error: ${err.message}`); process.exit(1); });
+// Set the exit code and let Node finish on its own (calling process.exit() right after the last fetch can trip
+// a libuv assertion on Windows).
+main().then(code => { process.exitCode = code ?? 0; }, err => { console.error(`Error: ${err.message}`); process.exitCode = 1; });
 
