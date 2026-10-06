@@ -52,7 +52,8 @@ Links are shareable via the URL hash, e.g. `#day=2026-10-05&pin=<id>&page=2`.
 | `config.js` | Supabase URL + **public anon key** (empty = demo mode) |
 | `config.example.js` | example of a filled config |
 | `supabase/schema.sql` | tables, cascade deletes, `board_owners`, Row Level Security policies (idempotent) |
-| `scripts/post.mjs` | command-line poster the bot uses |
+| `scripts/post.mjs` | command-line poster the bot uses (quick add + JSON command files) |
+| `.github/workflows/inbox.yml` | applies JSON commands pushed to the `inbox` branch |
 | `scripts/write-config.mjs` | writes `config.js` from env vars |
 | `.nojekyll` | tells GitHub Pages to serve files as-is |
 
@@ -129,13 +130,52 @@ node scripts/post.mjs --pin "Python" --body-file notes.txt --color green
 node scripts/post.mjs --pin "AI" --body "test" --dry-run        # shows what it would do
 ```
 
-- `--date` defaults to today. `--color` and `--day-title` only apply when the pin or day is created.
+- `--date` defaults to today in America/New_York. `--color` and `--day-title` only apply when the pin or day is created.
 - A literal `\n` inside `--body` becomes a line break.
 - Fallback auth: if `SUPABASE_OWNER_EMAIL`/`PASSWORD` aren't set, it uses `SUPABASE_SERVICE_KEY`
   (alias `SUPABASE_KEY`), which bypasses RLS. Keep that key secret and out of the repo.
 - It prints one JSON line (`day_id`, `pin_id`, `page_id`, `page_number`) on success.
 
 Credentials only ever come from environment variables. Nothing secret is stored in this repo.
+
+## Inbox: add, edit and delete via GitHub (for assistants like Ara)
+
+An assistant that can only push files to GitHub can still edit the board. It pushes **one JSON command
+file** to `inbox/<unique-name>.json` on the **`inbox` branch**. The
+[inbox workflow](.github/workflows/inbox.yml) then:
+
+1. runs `node scripts/post.mjs --command-file inbox/<name>.json --result-file inbox/results/<name>.json`
+   (scripts come from `main`, so script updates apply right away), signed in as the bot account;
+2. writes the result to `inbox/results/<name>.json`, deletes the command file, and pushes
+   `inbox: processed … [skip ci]` back to `inbox`.
+
+Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohnson/post-it-board/blob/inbox/inbox/README.md).
+
+```jsonc
+{"op": "add"|"edit"|"delete", "date": "YYYY-MM-DD" /* default today (New York) */, "pin": "Topic",
+ "title": "page title", "body": "text", "color": "yellow|pink|blue|green",
+ "target": "pin"|"page" /* edit/delete */, "page": "page title" | "pageNumber": 2, "newPin": "new pin title"}
+```
+
+- **add** matches the pin loosely on that day: case, spaces and punctuation are ignored, small typos are
+  allowed, and a whole-word prefix counts. With no match it creates the pin. With several possible
+  matches it writes nothing (`skipped_ambiguous`). If the same text was added to that pin in the last
+  10 minutes, it skips it (`skipped_duplicate`).
+- **edit/delete** need an exact pin title (case-insensitive) and an exact page title or `pageNumber`.
+  They never guess (`skipped_not_found` / `skipped_ambiguous`). Deleting a pin deletes its pages.
+- Statuses: `ok`, `skipped_duplicate`, `skipped_ambiguous`, `skipped_not_found`, `error_invalid` (exit 0,
+  command removed) and `error` (real failure: exit 1, command kept so a re-run retries it).
+
+Examples:
+```json
+{"op": "add", "pin": "AI", "title": "LLMs", "body": "Large language models predict the next word."}
+{"op": "edit", "target": "page", "date": "2026-10-05", "pin": "AI", "pageNumber": 2, "body": "Corrected text."}
+{"op": "delete", "target": "pin", "date": "2026-10-05", "pin": "AI"}
+```
+
+The workflow uses four repository secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_OWNER_EMAIL`
+(the bot account) and `SUPABASE_OWNER_PASSWORD`. Keep `.github/workflows/inbox.yml` identical on `main`
+and `inbox`; pushes to `inbox` run the copy on that branch.
 
 ## GitHub Pages
 
