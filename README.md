@@ -4,7 +4,7 @@ A tiny static website that looks like a middle-school classroom corkboard.
 Each **day** gets its own board. Each conversation **topic** is one **pin** (a colored
 sticky note), and each pin holds one or more **pages** of notes.
 
-**Live site:** https://mogesjohnson.github.io/post-it-board/ (once GitHub Pages is on, see below)
+**Live site:** https://mogesjohnson.github.io/post-it-board/ (served by GitHub Pages from `main`, see below)
 
 Plain HTML + CSS + vanilla JS. No frameworks, no build step, no dependencies.
 
@@ -103,9 +103,9 @@ Steps:
 4. **Point the site at your project.** Find the values in *Project Settings → API*:
    ```bash
    SUPABASE_URL=https://<ref>.supabase.co SUPABASE_ANON_KEY=<public anon key> node scripts/write-config.mjs
-   git add config.js && git commit -m "Connect Supabase" && git push
    ```
-   (Or just edit `config.js` by hand.) The anon/publishable key is **meant to be public**. RLS keeps it
+   (Or just edit `config.js` by hand.) Then get `config.js` onto `main` through a pull request, since
+   `main` doesn't accept direct pushes (see [Branch protection](#branch-protection)). The anon/publishable key is **meant to be public**. RLS keeps it
    read-only. **Never** put the `service_role` / secret key in `config.js`. The script refuses it.
 5. Open the site and click the **🔒 lock**. Sign in with your owner email and password. The **+**, select
    and trash tools appear. The session is kept in `localStorage` and refreshed automatically. Click the
@@ -197,7 +197,67 @@ Examples:
 
 The workflow uses four repository secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_OWNER_EMAIL`
 (the bot account) and `SUPABASE_OWNER_PASSWORD`. Keep `.github/workflows/inbox.yml` identical on `main`
-and `inbox`; pushes to `inbox` run the copy on that branch.
+and `inbox`; pushes to `inbox` run the copy on that branch. A change to it goes onto `main` through a pull
+request and onto `inbox` with a normal push.
+
+## Branch protection
+
+`main` is protected by a branch ruleset, and `inbox` is left open on purpose.
+
+**Ruleset [Protect main](https://github.com/mogesjohnson/post-it-board/rules/24617788)** (ID `24617788`,
+enforcement **Active**, created 2026-10-06). It applies to the default branch (`main`) only:
+
+| setting | what it does |
+|---------|--------------|
+| **Require a pull request before merging** | Every change reaches `main` through a pull request. Required approvals are set to **0**, because GitHub won't let you approve your own pull request; as the only maintainer you can still open and merge your own. |
+| **Block force pushes** | Nobody can rewrite `main`'s history. |
+| **Restrict deletions** | Nobody can delete `main`. |
+| **Bypass: Repository admin, *For pull requests only*** | The admin (you) can merge a pull request even when a rule would otherwise block the merge, but can never push to `main` directly. Don't switch this to *Always allow*: the inbox token acts as you, so a leaked token could then push to `main` too. |
+
+**Why `main` is protected.** The inbox workflow runs `main`'s `scripts/post.mjs` with the Supabase bot
+secrets, and GitHub Pages serves the live site from `main`. Anyone who can push to `main` could change that
+script to leak the bot password, or change the site. Assistants like Ara push with a token that acts as you,
+so without the ruleset a leaked token could do exactly that.
+
+**Why `inbox` is open.** Ara, the transcript poller (planned) and the inbox workflow's own result commits all
+push straight to `inbox`. A pull-request rule there would quietly stop posting: commands would sit on
+unmerged branches and never reach the workflow. What a leaked token can do on `inbox` is limited to adding,
+editing or deleting notes, which you undo by reverting with git and revoking the token. Two things keep it
+that way:
+
+- Pushes to `inbox` run the copy of `inbox.yml` on that branch, but GitHub refuses any push that changes
+  `.github/workflows/` from a token without the *Workflows* permission. Keep the inbox token at
+  **Contents read/write** only.
+- A Contents-write token can still merge an open pull request from a post-it-board branch, so don't leave
+  those open.
+
+**Changing `main` from now on:**
+
+```bash
+git switch -c my-change
+# edit, then commit
+git push -u origin my-change
+gh pr create --fill
+gh pr merge --merge --delete-branch
+```
+
+A direct `git push` to `main` is rejected with `GH013: Repository rule violations found`.
+
+**Checks (2026-10-06):**
+
+- GitHub's rules API lists the three rules on `main` and none on `inbox`:
+  ```bash
+  gh api repos/mogesjohnson/post-it-board/rules/branches/main --jq '.[].type'   # pull_request, non_fast_forward, deletion
+  gh api repos/mogesjohnson/post-it-board/rules/branches/inbox                  # []
+  ```
+- The inbox workflow checks out `main` only to read the scripts. Its one push is
+  `git push origin HEAD:inbox`, so the pull-request rule on `main` doesn't affect posting.
+- A direct push to `main` was rejected. The test used the commit that added this section, which then
+  reached `main` through a pull request instead.
+
+**To view or change the ruleset:** *Settings → Rules → Rulesets → Protect main*, or
+`gh api repos/mogesjohnson/post-it-board/rulesets/24617788`. Setting enforcement to *Disabled* switches it
+off without deleting it.
 
 ## GitHub Pages
 
