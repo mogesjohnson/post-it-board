@@ -4,7 +4,7 @@ A tiny static website that looks like a middle-school classroom corkboard.
 Each **day** gets its own board. Each conversation **topic** is one **pin** (a colored
 sticky note), and each pin holds one or more **pages** of notes.
 
-**Live site:** https://mogesjohnson.github.io/post-it-board/ (once GitHub Pages is on, see below)
+**Live site:** https://mogesjohnson.github.io/post-it-board/ (served by GitHub Pages from `main`, see below)
 
 Plain HTML + CSS + vanilla JS. No frameworks, no build step, no dependencies.
 
