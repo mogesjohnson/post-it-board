@@ -22,7 +22,7 @@ result is overwritten. Pull before you push: the workflow pushes to this branch 
   "title": "Page title",             // add: page title (optional) · edit page: NEW page title ("" clears it)
   "body": "Text…",                   // add: page text · edit page: NEW page text
   "color": "yellow|pink|blue|green", // add: color of a NEW pin · edit pin: new color
-  "target": "pin" | "page",          // required for edit/delete
+  "target": "pin" | "page" | "day",  // required for edit/delete ("day": delete only, see below)
   "page": "Existing page title",     // edit/delete page: which page (exact title) …
   "pageNumber": 2,                   // … or which page by number (1 = first, at most 10000). Exactly one of the two.
   "newPin": "Renamed topic"          // edit pin: new pin title
@@ -63,6 +63,10 @@ number from 1 to 10000 (a number, not a string). Line breaks in `body` are kept 
   `skipped_not_found`; more than one → `skipped_ambiguous`. Renaming a pin to a title another pin on that day
   already has is also `skipped_ambiguous` (nothing changes).
 - Deleting a pin permanently deletes all its pages. There is no undo.
+- **delete day** removes an **empty** day (no pins left), e.g. after deleting its last pin:
+  `{"op": "delete", "target": "day", "date": "2026-10-05"}`. `date` is required (no "today" default) and no other
+  field is allowed (`pin`, `page`, `body`, … → `error_invalid`). A day that still has a pin, even one without
+  pages, is left alone with status `skipped_not_empty` (`pinCount` in the result). It never deletes pins or pages.
 
 ## Result file
 
@@ -88,6 +92,7 @@ rest depend on the outcome:
 | `matchType` | `add` with status `ok` or `skipped_duplicate` |
 | `pageNumber` | `add` with `ok` / `skipped_duplicate`, and page edits/deletes with `ok`; never for pin edits/deletes or other statuses |
 | `candidates` | `add` with `skipped_ambiguous`: `[{pinId, pinTitle}, …]` |
+| `pinCount` | delete day with `skipped_not_empty` |
 | `date` | every status except `error` and `error_invalid` |
 | `dryRun` | only for `--dry-run` runs |
 
@@ -99,6 +104,7 @@ rest depend on the outcome:
 | `skipped_duplicate` | a page with the same title and text was added to that pin in the last 10 min | removed |
 | `skipped_ambiguous` | more than one pin/page could match, or a rename would clash, so nothing changed | removed |
 | `skipped_not_found` | the day/pin/page doesn't exist, so nothing changed | removed |
+| `skipped_not_empty` | delete day: the day still has pins, so nothing changed | removed |
 | `error_invalid` | bad JSON or bad fields (see `message`) | removed |
 | `error` | real failure (network, auth, database) | **kept**, re-run the workflow to retry |
 
