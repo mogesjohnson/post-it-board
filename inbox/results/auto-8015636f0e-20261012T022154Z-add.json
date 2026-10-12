@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-11",
+    "pin": "Poller test topic",
+    "title": "Summary",
+    "body": "- Ten-by-ten plot at Maple Street Community Garden.\n- Planting starts May 1st.\n- Vegetables: peppers, zucchini (full sun), lettuce (shade).\n- Tasks: Buy a hose, pay $40 plot fee by Friday."
+  },
+  "matched": {
+    "dayId": "f50e264e-8e6c-4852-9430-95d5e1142441",
+    "pinId": "37b6d08d-bd36-4edf-8512-0e96ffdc5e13",
+    "pageId": "4ab8ce3d-a6e0-41a8-8dc5-cfa00a12bcbb",
+    "pinTitle": "Poller test topic"
+  },
+  "message": "created day 2026-10-11; created pin \"Poller test topic\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-12T02:40:21.534Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-11"
+}
