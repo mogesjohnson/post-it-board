@@ -11,6 +11,9 @@
     dayId: null,
     pins: [],
     pinId: null,      // opened pin (null = board view)
+    view: "days",     // "days" = one day's board; "topics" = every pin across all days, newest update first
+    topics: [],
+    fromTopics: false, // the opened pin was picked in the Topics view: "back" returns there
     pages: [],
     pageIdx: 0,
     selecting: false,
@@ -50,6 +53,12 @@
     var narrow = window.matchMedia && window.matchMedia("(max-width: 640px)").matches; // phones: drop the weekday
     return d.toLocaleDateString(undefined, { weekday: narrow ? undefined : "short", month: "short", day: "numeric", year: "numeric" });
   }
+  // ISO timestamp -> local date for the Topics list ("Oct 11, 2026"); the full time goes in a tooltip
+  function fmtStamp(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return "";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
   function canEdit() { return store.mode === "local" || Auth.isSignedIn(); }
   var toastTimer;
   function toast(msg) {
@@ -60,15 +69,17 @@
   function currentDay() { return state.days.find(function (d) { return d.id === state.dayId; }); }
   function currentPin() { return state.pins.find(function (p) { return p.id === state.pinId; }); }
 
-  /* ---------- URL hash: #day=YYYY-MM-DD&pin=<id>&page=N ---------- */
+  /* ---------- URL hash: #day=YYYY-MM-DD&pin=<id>&page=N  ·  #view=topics  ·  ...&from=topics ---------- */
   function readHash() {
     var q = new URLSearchParams(location.hash.replace(/^#/, ""));
-    return { day: q.get("day"), pin: q.get("pin"), page: parseInt(q.get("page") || "1", 10) || 1 };
+    return { day: q.get("day"), pin: q.get("pin"), page: parseInt(q.get("page") || "1", 10) || 1,
+      view: q.get("view") === "topics" ? "topics" : "days", from: q.get("from") };
   }
   function writeHash() {
     var d = currentDay(), q = new URLSearchParams();
-    if (d) q.set("day", d.board_date);
-    if (state.pinId) { q.set("pin", state.pinId); q.set("page", String(state.pageIdx + 1)); }
+    if (state.view === "topics" && !state.pinId) q.set("view", "topics");
+    else if (d) q.set("day", d.board_date);
+    if (state.pinId) { q.set("pin", state.pinId); q.set("page", String(state.pageIdx + 1)); if (state.fromTopics) q.set("from", "topics"); }
     var h = "#" + q.toString();
     if (location.hash !== h) history.replaceState(null, "", h);
   }
@@ -98,6 +109,7 @@
     render();
   }
   function closePin() {
+    if (state.fromTopics) { showTopics(state.pinId).catch(fail); return; }
     navSeq++;
     if (state.pinId) state.focusNext = "note:" + state.pinId; // back to the note we came from
     state.animateAll = true;
@@ -106,10 +118,44 @@
   }
   async function goDay(dayId) {
     navSeq++;
+    state.view = "days"; state.fromTopics = false;
     state.dayId = dayId; state.pinId = null; state.pages = []; state.animateAll = true;
     state.selPins.clear(); state.selPages.clear();
     await loadPins();
     render();
+  }
+
+  // Topics view: every pin across all days. focusId = the topic to focus when coming back from it.
+  async function showTopics(focusId) {
+    var seq = ++navSeq;
+    var topics = await store.listTopics();
+    if (seq !== navSeq) return;
+    state.topics = topics;
+    state.view = "topics"; state.fromTopics = false;
+    state.pinId = null; state.pages = []; state.pageIdx = 0;
+    state.selPins.clear(); state.selPages.clear();
+    if (state.selecting) setSelecting(false);
+    if (focusId) state.focusNext = "topic:" + focusId;
+    render();
+  }
+  function showDays() {
+    navSeq++;
+    state.view = "days"; state.fromTopics = false;
+    state.pinId = null; state.pages = []; state.pageIdx = 0; state.animateAll = true;
+    state.selPages.clear();
+    loadPins().then(render).catch(fail); // the day may have changed while in Topics
+  }
+  // Open a topic on its own day, so editing and "back" behave like the day view; "back" returns to Topics.
+  async function openTopic(t) {
+    var day = state.days.find(function (d) { return d.board_date === t.board_date; });
+    if (!day) { await loadDays(t.board_date); day = state.days.find(function (d) { return d.board_date === t.board_date; }); }
+    if (!day) throw new Error("That topic's day is gone — reload the page.");
+    var seq = ++navSeq;
+    state.dayId = day.id;
+    await loadPins();
+    if (seq !== navSeq) return;
+    state.fromTopics = true;
+    await openPin(t.id, 0, "back");
   }
 
   /* ---------- rendering ---------- */
@@ -122,9 +168,10 @@
     document.body.classList.toggle("can-edit", canEdit());
     if (!canEdit() && state.selecting) setSelecting(false);
     document.body.classList.toggle("selecting", state.selecting);
+    document.body.classList.toggle("topics-mode", state.view === "topics" && !state.pinId);
     renderHeader();
     view.textContent = "";
-    view.appendChild(state.pinId ? renderPinView() : renderBoard());
+    view.appendChild(state.pinId ? renderPinView() : state.view === "topics" ? renderTopics() : renderBoard());
     writeHash();
     restoreFocus(focusKey, viewChange);
   }
@@ -154,6 +201,9 @@
   }
 
   function renderHeader() {
+    var topicsOn = state.view === "topics" || state.fromTopics;
+    $("daysTab").setAttribute("aria-pressed", String(!topicsOn));
+    $("topicsTab").setAttribute("aria-pressed", String(topicsOn));
     var sel = $("daySelect"); sel.textContent = "";
     if (!state.days.length) sel.appendChild(el("option", { text: "No days yet" }));
     state.days.forEach(function (d) {
@@ -215,13 +265,35 @@
     return list;
   }
 
+  function renderTopics() {
+    if (!state.topics.length) return emptyCard("No topics yet", canEdit() ? "Pin a topic on a day and it shows up here." : "Check back soon!");
+    var list = el("ul", { class: "topic-list", "aria-label": "Topics, most recently updated first" });
+    state.topics.forEach(function (t) {
+      list.appendChild(el("li", {
+        class: "topic-card paper-" + colorOf(t), tabindex: "0", role: "button", "data-focus": "topic:" + t.id,
+        "aria-label": "Open topic " + t.title,
+        onclick: function () { openTopic(t).catch(fail); },
+        onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
+      }, [
+        el("div", { class: "topic-head" }, [
+          el("h3", { text: t.title }),
+          el("time", { class: "topic-updated", datetime: t.updated_at, title: t.updated_at ? new Date(t.updated_at).toLocaleString() : null,
+            text: t.updated_at ? "Updated " + fmtStamp(t.updated_at) : "" }),
+        ]),
+        el("div", { class: "topic-meta", text: (t.board_date ? fmtDate(t.board_date) + " · " : "") + t.page_count + (t.page_count === 1 ? " page" : " pages") }),
+        el("div", { class: "topic-summary" + (t.summary ? "" : " none"), text: t.summary || "No summary yet." }),
+      ]));
+    });
+    return list;
+  }
+
   function renderPinView() {
     var pin = currentPin() || { id: state.pinId, title: "", color: "yellow" };
     var color = colorOf(pin);
     var wrap = el("section", { class: "pin-view paper-" + color });
 
     var head = el("div", { class: "pin-view-head" }, [
-      el("button", { class: "chip-btn", text: "← All pins", "data-focus": "back", onclick: closePin }),
+      el("button", { class: "chip-btn", text: state.fromTopics ? "← Topics" : "← All pins", "data-focus": "back", onclick: closePin }),
       el("h2", { text: pin.title }),
       el("span", { class: "spacer" }),
       canEdit() ? el("button", { class: "chip-btn", text: "✎ Rename pin", onclick: renamePin }) : null,
@@ -421,6 +493,8 @@
     if (i > 0) goDay(state.days[i - 1].id).catch(fail);
   });
   $("addDayBtn").addEventListener("click", addDay);
+  $("daysTab").addEventListener("click", function () { if (state.view !== "days" || state.fromTopics) showDays(); });
+  $("topicsTab").addEventListener("click", function () { if (state.view !== "topics" || state.pinId) showTopics().catch(fail); });
   $("addBtn").addEventListener("click", function () { if (state.pinId) addPage(); else addPin(); });
   $("selectBtn").addEventListener("click", function () { setSelecting(!state.selecting); render(); });
   $("trashBtn").addEventListener("click", deleteSelected);
@@ -437,10 +511,12 @@
 
   async function route() {
     var h = readHash();
+    if (h.view === "topics" && !h.pin) { if (state.view !== "topics" || state.pinId) await showTopics(); return; }
+    state.view = "days"; state.fromTopics = h.from === "topics" && !!h.pin;
     var day = h.day && state.days.find(function (d) { return d.board_date === h.day; });
     if (day && day.id !== state.dayId) { navSeq++; state.dayId = day.id; state.selPins.clear(); await loadPins(); }
     if (h.pin && state.pins.some(function (p) { return p.id === h.pin; })) await openPin(h.pin, h.page - 1);
-    else { navSeq++; state.pinId = null; state.pages = []; state.selPages.clear(); render(); }
+    else { navSeq++; state.fromTopics = false; state.pinId = null; state.pages = []; state.selPages.clear(); render(); }
   }
 
   // The store drops a session the server no longer accepts; switch to the read-only view and say why.
@@ -469,9 +545,13 @@
     var h = readHash();
     try {
       await loadDays(h.day);
-      await loadPins();
-      if (h.pin && state.pins.some(function (p) { return p.id === h.pin; })) await openPin(h.pin, h.page - 1);
-      else render();
+      if (h.view === "topics" && !h.pin) await showTopics();
+      else {
+        await loadPins();
+        state.fromTopics = h.from === "topics" && !!h.pin;
+        if (h.pin && state.pins.some(function (p) { return p.id === h.pin; })) await openPin(h.pin, h.page - 1);
+        else { state.fromTopics = false; render(); }
+      }
     } catch (e) {
       render();
       view.textContent = "";
