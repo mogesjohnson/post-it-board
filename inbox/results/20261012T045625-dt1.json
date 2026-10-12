@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-01-03",
+    "pin": "ZZ delete-day test",
+    "title": "t",
+    "body": "synthetic"
+  },
+  "matched": {
+    "dayId": "c31df392-cc00-4dca-a1d7-aef0a7510d57",
+    "pinId": "5866c3d0-565c-4c68-a870-e90fa4f966e8",
+    "pageId": "fc3ba868-86d6-4f7b-b6e8-849e9da03520",
+    "pinTitle": "ZZ delete-day test"
+  },
+  "message": "created day 2026-01-03; created pin \"ZZ delete-day test\"; added page 1 \"t\".",
+  "processedAt": "2026-10-12T04:56:37.564Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-01-03"
+}
