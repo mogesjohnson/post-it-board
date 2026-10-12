@@ -129,6 +129,20 @@ check "F exits 1" '[ "$code" = 1 ]'
 check "F warns about the failed rebase and names the applied command" 'grep -q "::warning::Rebase" "$C/log.txt" && grep -q "::error::.*f1.json" "$C/log.txt"'
 check "F leaves no rebase in progress" '[ ! -d "$C/inbox-branch/.git/rebase-merge" ] && [ ! -d "$C/inbox-branch/.git/rebase-apply" ]'
 
+echo "== G: delete an empty day; a day with pins is kept (skipped_not_empty)"
+ctl reset; setup g
+seed "{\"table\":\"days\",\"row\":{\"board_date\":\"$D\"}}" >/dev/null
+day2=$(seed '{"table":"days","row":{"board_date":"2026-10-06"}}')
+seed "{\"table\":\"pins\",\"row\":{\"day_id\":\"$day2\",\"title\":\"Keep\",\"color\":\"yellow\",\"position\":0}}" >/dev/null
+command g1.json "{\"op\":\"delete\",\"target\":\"day\",\"date\":\"$D\"}"
+command g2.json '{"op":"delete","target":"day","date":"2026-10-06"}'
+push_commands
+code=$(run_step)
+days() { curl -s "http://127.0.0.1:$PORT/_ctl/state" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0,"utf8")).days.map(d => d.board_date).join(","))'; }
+check "G exits 0, both commands removed" '[ "$code" = 0 ] && ! remote_has inbox/g1.json && ! remote_has inbox/g2.json'
+check "G statuses ok + skipped_not_empty" 'grep -q "g1.json | ok" "$GITHUB_STEP_SUMMARY" && grep -q "g2.json | skipped_not_empty" "$GITHUB_STEP_SUMMARY"'
+check "G only the empty day is gone" '[ "$(days)" = "2026-10-06" ]'
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

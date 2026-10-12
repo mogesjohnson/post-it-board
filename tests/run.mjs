@@ -397,6 +397,61 @@ await test("process exits by itself with the right code (keep-alive connections)
   status(await add("x", "z"), "error", 1);
 });
 
+/* ---------- delete of an empty day ---------- */
+await test("delete day: an empty day is deleted; nothing else changes", async () => {
+  mock.reset();
+  const empty = mock.seed("days", { board_date: D, title: null });
+  const other = mock.seed("days", { board_date: "2026-10-06", title: null });
+  const p = mock.seed("pins", { day_id: other.id, title: "Keep", color: "yellow", position: 0 });
+  seedPage(p, "t", "b", 0);
+  const r = await run({ op: "delete", target: "day", date: D });
+  ok(r, r.result.matched.dayId === empty.id && db().days.length === 1 && db().days[0].id === other.id && db().pins.length === 1 && db().pages.length === 1);
+});
+await test("delete day: a day with pins -> skipped_not_empty, nothing deleted", async () => {
+  const { pins } = setup(["AI"]);
+  seedPage(pins[0], "t", "b", 0);
+  const r = await run({ op: "delete", target: "day", date: D });
+  status(r, "skipped_not_empty");
+  expect(r.result.pinCount === 1 && db().days.length === 1 && db().pins.length === 1 && db().pages.length === 1, r);
+});
+await test("delete day: a pin without pages still counts (not empty)", async () => {
+  setup(["Empty pin"]);
+  status(await run({ op: "delete", target: "day", date: D }), "skipped_not_empty");
+  expect(db().days.length === 1 && db().pins.length === 1, db());
+});
+await test("delete day: no such day -> skipped_not_found", async () => {
+  mock.reset();
+  status(await run({ op: "delete", target: "day", date: D }), "skipped_not_found");
+});
+await test("delete day: --dry-run deletes nothing", async () => {
+  mock.reset(); mock.seed("days", { board_date: D, title: null });
+  const r = await run({ op: "delete", target: "day", date: D }, ["--dry-run"]);
+  ok(r, r.result.dryRun === true && db().days.length === 1);
+});
+await test("delete day: invalid shapes -> error_invalid (date required, delete only, no pin/page fields)", async () => {
+  mock.reset(); mock.seed("days", { board_date: D, title: null });
+  for (const bad of [
+    { op: "delete", target: "day" },
+    { op: "edit", target: "day", date: D },
+    { op: "add", target: "day", date: D, body: "x" },
+    { op: "delete", target: "day", date: D, pin: "AI" },
+    { op: "delete", target: "day", date: D, pageNumber: 1 },
+    { op: "delete", target: "day", date: "2026-02-30" },
+  ]) {
+    const r = await run(bad);
+    status(r, "error_invalid");
+  }
+  expect(db().days.length === 1, db());
+  status(await run({ op: "delete", target: "days", date: D, pin: "AI" }), "error_invalid"); // only "day"
+  status(await run({ op: "delete", date: D, pin: "AI" }), "error_invalid");                 // a pin delete still needs a target
+});
+await test("delete day: a database error -> error, exit 1, day kept", async () => {
+  mock.reset(); mock.seed("days", { board_date: D, title: null });
+  mock.fail({ match: "DELETE /rest/v1/days" });
+  status(await run({ op: "delete", target: "day", date: D }), "error", 1);
+  expect(db().days.length === 1, db());
+});
+
 /* ---------- done ---------- */
 await mock.close();
 rmSync(tmp, { recursive: true, force: true });
