@@ -1,0 +1,19 @@
+{
+  "status": "ok",
+  "op": "delete",
+  "input": {
+    "op": "delete",
+    "target": "pin",
+    "date": "2026-10-08",
+    "pin": "Poller test"
+  },
+  "matched": {
+    "dayId": "16d3f136-3704-4349-9bf2-716847453889",
+    "pinId": "10ac8d67-bd95-46d9-8b9d-d1a965964c9c",
+    "pageId": null,
+    "pinTitle": "Poller test"
+  },
+  "message": "Deleted pin \"Poller test\" and all its pages.",
+  "processedAt": "2026-10-12T01:37:15.209Z",
+  "date": "2026-10-08"
+}
