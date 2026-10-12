@@ -162,6 +162,7 @@ Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohns
 {"op": "add"|"edit"|"delete", "date": "YYYY-MM-DD" /* default today (New York) */, "pin": "Topic",
  "title": "page title", "body": "text", "color": "yellow|pink|blue|green",
  "target": "pin"|"page" /* edit/delete */, "page": "page title" | "pageNumber": 2, "newPin": "new pin title"}
+{"op": "delete", "target": "day", "date": "YYYY-MM-DD"}   /* removes an EMPTY day only */
 ```
 
 - **add** matches the pin loosely on that day:
@@ -186,7 +187,10 @@ Full docs: [`inbox/README.md` on the inbox branch](https://github.com/mogesjohns
   (`skipped_duplicate`, with that page's `pageNumber`).
 - **edit/delete** need an exact pin title (case-insensitive) and an exact page title or `pageNumber`.
   They never guess (`skipped_not_found` / `skipped_ambiguous`). Deleting a pin deletes its pages.
-- Statuses: `ok`, `skipped_duplicate`, `skipped_ambiguous`, `skipped_not_found`, `error_invalid` (exit 0,
+- **delete day** (`"target": "day"`, explicit `date`, no other fields) removes the day row only when it has **no
+  pins** (a pin without pages counts); otherwise `skipped_not_empty` and nothing changes. Use it to clean up after
+  deleting the last pin of a day.
+- Statuses: `ok`, `skipped_duplicate`, `skipped_ambiguous`, `skipped_not_found`, `skipped_not_empty`, `error_invalid` (exit 0,
   command removed) and `error` (real failure: exit 1, command kept so a re-run retries it). One failed command
   doesn't stop the others in the same run.
 - If the workflow can't push the results back to `inbox` (5 attempts), the run **fails** with an error that

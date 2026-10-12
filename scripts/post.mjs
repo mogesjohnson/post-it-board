@@ -11,7 +11,8 @@
 // 2) Command file (used by the GitHub inbox workflow):
 //   node scripts/post.mjs --command-file inbox/foo.json [--result-file inbox/results/foo.json] [--dry-run]
 //   JSON: {"op":"add"|"edit"|"delete", "date", "pin", "title", "body", "color",
-//          "target":"pin"|"page", "page", "pageNumber", "newPin"}   (see inbox/README.md)
+//          "target":"pin"|"page"|"day", "page", "pageNumber", "newPin"}   (see inbox/README.md)
+//   {"op":"delete","target":"day","date":"YYYY-MM-DD"} removes that day's row only when it has no pins left.
 //   Prints a result object {status, op, input, matched, message, processedAt} and writes it to
 //   --result-file. Exit 0 when handled or skipped; non-zero only for real failures.
 //
@@ -169,7 +170,8 @@ function validate(raw) {
     if (!isValidDate(raw.date)) errs.push(`"date" must be a real date in YYYY-MM-DD format`);
     cmd.date = raw.date;
   }
-  cmd.pin = str("pin", LIMITS.pin, { required: true });
+  const dayTarget = raw.target === "day";
+  cmd.pin = str("pin", LIMITS.pin, { required: !dayTarget });
   cmd.title = str("title", LIMITS.title, { allowEmpty: true });
   cmd.body = str("body", LIMITS.body, { allowEmpty: true });
   cmd.page = str("page", LIMITS.title);
@@ -187,7 +189,13 @@ function validate(raw) {
   if (cmd.op === "add") {
     if (!(cmd.body && cmd.body.trim()) && !(cmd.title && cmd.title.trim())) errs.push(`add needs "body" (and/or "title")`);
   }
-  if (cmd.op === "edit" || cmd.op === "delete") {
+  if (dayTarget) {
+    // delete of an EMPTY day: nothing else is allowed, and the date must be explicit (no "today" default)
+    if (cmd.op !== "delete") errs.push(`target "day" is only allowed with "op": "delete"`);
+    if (cmd.date === undefined) errs.push(`delete of a day needs "date"`);
+    const extra = ["pin", "title", "body", "page", "pageNumber", "newPin", "color"].filter(k => raw[k] !== undefined && raw[k] !== null);
+    if (extra.length) errs.push(`delete of a day takes only "date" (remove ${extra.map(k => `"${k}"`).join(", ")})`);
+  } else if (cmd.op === "edit" || cmd.op === "delete") {
     if (!["pin", "page"].includes(cmd.target)) errs.push(`${cmd.op} needs "target": "pin" or "page"`);
     if (cmd.target === "page") {
       const hasTitle = cmd.page !== undefined, hasNum = cmd.pageNumber !== undefined;
@@ -282,6 +290,21 @@ async function runCommand(cmd, api, dry) {
 
   /* ----- edit / delete: exact matches only, never guess ----- */
   if (!day) return out("skipped_not_found", `There is no board for ${cmd.date}.`);
+
+  /* ----- delete of an empty day: never removes a pin or page ----- */
+  if (cmd.target === "day") {
+    if (pins.length) {
+      return out("skipped_not_empty", `The board for ${cmd.date} still has ${pins.length} pin(s); the day was not deleted.`, { pinCount: pins.length });
+    }
+    if (!dry) {
+      // check again right before deleting: a pin added in between would otherwise go with the day (cascade)
+      const again = await rest("GET", `pins?select=id&day_id=eq.${enc(day.id)}&limit=1`);
+      if (again.length) return out("skipped_not_empty", `A pin was added to ${cmd.date} just now; the day was not deleted.`, { pinCount: again.length });
+      await rest("DELETE", `days?id=eq.${enc(day.id)}`);
+    }
+    return out("ok", `Deleted the empty day ${cmd.date}.`);
+  }
+
   const hits = pins.filter(p => exactCI(p.title) === exactCI(cmd.pin));
   if (hits.length === 0) return out("skipped_not_found", `No pin titled "${cmd.pin}" on ${cmd.date}.`);
   if (hits.length > 1) return out("skipped_ambiguous", `${hits.length} pins are titled "${cmd.pin}" on ${cmd.date}; nothing was changed.`);
