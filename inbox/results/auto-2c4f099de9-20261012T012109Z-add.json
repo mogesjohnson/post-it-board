@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-11",
+    "pin": "Poller test",
+    "title": "Garden bed dimensions and planting (9:06 PM)",
+    "body": "- Build a 4x8 raised bed this weekend.\n- Use cedar boards about 12 inches tall.\n- Need roughly 32 cubic feet of soil.\n- Plant tomatoes and basil.\n- Buy materials on Saturday.\n- Place bed on south side for maximum sun."
+  },
+  "matched": {
+    "dayId": "c7f586b9-1b3f-412c-808a-718e2c4a8c17",
+    "pinId": "80b9b24f-a2b8-4c4a-ba71-58b5cbf7c1df",
+    "pageId": "e3ab55eb-f63f-4c0f-a4f6-f6593d667e26",
+    "pinTitle": "Poller test"
+  },
+  "message": "created day 2026-10-11; created pin \"Poller test\"; added page 1 \"Garden bed dimensions and planting (9:06 PM)\".",
+  "processedAt": "2026-10-12T01:36:24.701Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-11"
+}

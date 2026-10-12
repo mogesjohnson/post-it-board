@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-08",
+    "pin": "Poller test",
+    "title": "Cake order reminder (9:36 PM)",
+    "body": "- Remind user to call the bakery about the cake order."
+  },
+  "matched": {
+    "dayId": "16d3f136-3704-4349-9bf2-716847453889",
+    "pinId": "10ac8d67-bd95-46d9-8b9d-d1a965964c9c",
+    "pageId": "b04b6d73-6eb2-40ba-8d0e-1dd446ff58fd",
+    "pinTitle": "Poller test"
+  },
+  "message": "created day 2026-10-08; created pin \"Poller test\"; added page 1 \"Cake order reminder (9:36 PM)\".",
+  "processedAt": "2026-10-12T01:36:25.187Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-08"
+}
