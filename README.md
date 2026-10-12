@@ -38,8 +38,13 @@ Deleting a pin permanently deletes its pages. There is no recycle bin.
   - **☑ Select mode** puts a checkbox on every pin (the whole pin, all pages) and on every page.
     The **🗑 trash can** asks you to confirm, then deletes the selected items for good.
 - **🔒 Lock icon:** owner sign-in (email + password). Everyone else gets a read-only board.
+- **Days / Topics tabs:** *Days* is the board above. *Topics* lists every pin across all days, most recently
+  updated first (latest `updated_at` of the pin or any of its pages), with its name, last-updated date, day
+  and page 1 as the topic's summary. Click a topic to open it on its own day; **← Topics** (or Esc) returns.
+  The Topics list is read-only; edit a topic by opening it.
 
-Links are shareable via the URL hash, e.g. `#day=2026-10-05&pin=<id>&page=2`.
+Links are shareable via the URL hash, e.g. `#day=2026-10-05&pin=<id>&page=2`, or `#view=topics` for the
+Topics list.
 
 ## Files
 
@@ -49,13 +54,14 @@ Links are shareable via the URL hash, e.g. `#day=2026-10-05&pin=<id>&page=2`.
 | `styles.css` | corkboard, wooden frame, sticky notes, pushpins, animations, phone layout |
 | `app.js` | the UI: days, pins, pages, select mode, delete, sign-in |
 | `store.js` | storage layer (Supabase REST or local demo) + Supabase Auth session |
+| `topics.js` | Topics view helpers: page 1 = summary, newest-updated-first sort (pure, unit-tested) |
 | `config.js` | Supabase URL + **public anon key** (empty = demo mode) |
 | `config.example.js` | example of a filled config |
 | `supabase/schema.sql` | tables, cascade deletes, `board_owners`, Row Level Security policies (idempotent) |
 | `scripts/post.mjs` | command-line poster the bot uses (quick add + JSON command files) |
 | `.github/workflows/inbox.yml` | applies JSON commands pushed to the `inbox` branch |
 | `scripts/write-config.mjs` | writes `config.js` from env vars |
-| `tests/` | offline tests for `post.mjs` and the inbox workflow step (`node tests/run.mjs`, `bash tests/workflow.sh`) |
+| `tests/` | offline tests for `post.mjs`, the inbox workflow step and the Topics sort (`node tests/run.mjs`, `bash tests/workflow.sh`, `node tests/topics.mjs`) |
 | `.nojekyll` | tells GitHub Pages to serve files as-is |
 
 ## Demo mode

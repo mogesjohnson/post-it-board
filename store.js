@@ -4,6 +4,8 @@
  *   listDays()                      -> [{id, board_date, title}]  newest first
  *   listPins(dayId)                 -> [{id, day_id, title, color, position, page_count}]
  *   listPages(pinId)                -> [{id, pin_id, title, body, position}]
+ *   listTopics()                    -> every pin across all days with its page 1 summary, newest update first
+ *                                      [{id, title, color, board_date, updated_at, summary, page_title, page_count}]
  *   createDay({board_date, title})
  *   createPin({day_id, title, color, position})
  *   createPage({pin_id, title, body, position})
@@ -227,6 +229,12 @@
   SupabaseStore.prototype.listPages = function (pinId) {
     return this.req("GET", "pages?select=*&pin_id=eq." + enc(pinId) + "&order=position.asc,created_at.asc");
   };
+  // One request: every pin with its day and pages (read-only, works with the public anon key).
+  SupabaseStore.prototype.listTopics = async function () {
+    var rows = await this.req("GET", "pins?select=id,title,color,created_at,updated_at,day:days(board_date)," +
+      "pages(id,title,body,position,created_at,updated_at)&order=updated_at.desc");
+    return window.PostItTopics.fromRows(rows);
+  };
   SupabaseStore.prototype.createDay = async function (d) {
     return first(await this.req("POST", "days", { board_date: d.board_date, title: d.title || null }));
   };
@@ -305,6 +313,17 @@
   };
   LocalStore.prototype.listPages = function (pinId) {
     return done(this.db.pages.filter(function (p) { return p.pin_id === pinId; }).sort(byPos));
+  };
+  LocalStore.prototype.listTopics = function () {
+    var db = this.db;
+    var rows = db.pins.map(function (p) {
+      var day = db.days.find(function (d) { return d.id === p.day_id; });
+      return Object.assign({}, p, {
+        day: day ? { board_date: day.board_date } : null,
+        pages: db.pages.filter(function (pg) { return pg.pin_id === p.id; }),
+      });
+    });
+    return done(window.PostItTopics.fromRows(rows));
   };
   LocalStore.prototype.createDay = function (d) {
     if (this.db.days.some(function (x) { return x.board_date === d.board_date; })) return Promise.reject(new Error("That day already exists."));
