@@ -18,6 +18,11 @@
         <header class="board-head">
           <h1 class="title-card"><span class="tack" aria-hidden="true"></span>Post-it Board</h1>
 
+          <nav class="view-tabs" aria-label="View">
+            <button class="tab-btn" id="daysTab" aria-pressed="true">Days</button>
+            <button class="tab-btn" id="topicsTab" aria-pressed="false">Topics</button>
+          </nav>
+
           <nav class="day-nav" aria-label="Choose day">
             <button class="icon-btn" id="olderBtn" title="Older day" aria-label="Older day">&#8249;</button>
             <select id="daySelect" aria-label="Day"></select>
@@ -96,6 +101,7 @@
   <div class="toast" id="toast" role="status" hidden></div>
 
   <script src="config.js"></script>
+  <script src="topics.js"></script>
   <script src="store.js"></script>
   <script src="app.js"></script>
 </body>
