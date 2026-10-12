@@ -1,7 +1,0 @@
-{
-  "op": "add",
-  "date": "2026-10-12",
-  "pin": "Turn off wireless charger",
-  "title": "Summary",
-  "body": "- User asked to turn off wireless charging.\n- Grok located the toggle setting.\n- Toggle is currently open on screen."
-}

@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-12",
+    "pin": "Turn off wireless charger",
+    "title": "Summary",
+    "body": "- User asked to turn off wireless charging.\n- Grok located the toggle setting.\n- Toggle is currently open on screen."
+  },
+  "matched": {
+    "dayId": "89320279-e205-4341-850a-986310dac622",
+    "pinId": "c7df6d4b-06e2-4666-8886-1e8366e0758f",
+    "pageId": "3bbfd2cf-1771-4405-a344-4d3619f45de2",
+    "pinTitle": "Turn off wireless charger"
+  },
+  "message": "created pin \"Turn off wireless charger\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-12T19:12:43.631Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-12"
+}
