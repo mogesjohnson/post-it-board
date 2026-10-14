@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-14",
+    "pin": "CLI vs Agentic Orchestration",
+    "title": "Summary",
+    "body": "- A normal CLI executes commands once and forgets them.\n- An agentic harness like Hermes or OpenClaw maintains persistent loops for tasks.\n- Local agents die with the machine; cloud backends survive shutdowns."
+  },
+  "matched": {
+    "dayId": "aba0ba16-17f4-4786-87c4-c2737df12b42",
+    "pinId": "428b9998-d786-470b-a3b7-fcc3e248cf03",
+    "pageId": "aac07c58-01c7-49e1-9696-de94c63109e3",
+    "pinTitle": "CLI vs Agentic Orchestration"
+  },
+  "message": "created day 2026-10-14; created pin \"CLI vs Agentic Orchestration\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-14T20:19:12.178Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-14"
+}
