@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-14",
+    "pin": "One in a Million",
+    "title": "Summary",
+    "body": "- User requested \"One in a Million\" by Bebe Rexha.\n- Grok confirmed playing the track on Spotify."
+  },
+  "matched": {
+    "dayId": "aba0ba16-17f4-4786-87c4-c2737df12b42",
+    "pinId": "d37381b5-2ed4-4744-a897-4fc8ce85a471",
+    "pageId": "41b5f479-65f1-4dee-b595-064b6004cb33",
+    "pinTitle": "One in a Million"
+  },
+  "message": "created pin \"One in a Million\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-14T22:12:32.712Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-14"
+}
