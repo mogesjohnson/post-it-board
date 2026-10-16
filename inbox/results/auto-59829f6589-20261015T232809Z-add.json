@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-15",
+    "pin": "Tesla Fire Safety",
+    "title": "Summary",
+    "body": "- Electric vehicles are statistically more prone to fires during crashes.\n- Fires occur roughly twice as often per million EVs compared to gas cars.\n- EVs burn hotter and require significantly more water to extinguish."
+  },
+  "matched": {
+    "dayId": "77905592-799d-4327-a6b9-d836fc6334d6",
+    "pinId": "5cbc258c-56e4-463c-824c-eb32762730e8",
+    "pageId": "9004c919-ac39-48bd-998e-ad627358a189",
+    "pinTitle": "Tesla Fire Safety"
+  },
+  "message": "created pin \"Tesla Fire Safety\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-16T01:39:11.929Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-15"
+}
