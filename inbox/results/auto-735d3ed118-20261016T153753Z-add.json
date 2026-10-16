@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-16",
+    "pin": "Halloween Mode Music",
+    "title": "Summary",
+    "body": "- User switched Grok to Halloween mode.\n- Grok confirmed the spooky timing fit Friday morning.\n- Grok mentioned playing old Beethoven-style music."
+  },
+  "matched": {
+    "dayId": "eb02b5ed-6b45-4ab8-b5c8-ac01a93f85d1",
+    "pinId": "fa9dc6b9-8ee7-48d3-a9ee-bebb8e476b2e",
+    "pageId": "0c1733b2-411f-4a2c-bf42-13576c51a972",
+    "pinTitle": "Halloween Mode Music"
+  },
+  "message": "created pin \"Halloween Mode Music\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-16T18:59:32.238Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-16"
+}

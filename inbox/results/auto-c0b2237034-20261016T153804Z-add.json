@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-16",
+    "pin": "Housewife by Tate McRae",
+    "title": "Summary",
+    "body": "- Grok is playing \"Housewife\" by Tate McRae.\n- Music available on Spotify."
+  },
+  "matched": {
+    "dayId": "eb02b5ed-6b45-4ab8-b5c8-ac01a93f85d1",
+    "pinId": "e843b0be-02cf-4652-af0d-4ccf315d3927",
+    "pageId": "1131b021-0113-4b41-b2cd-3be0f39f9226",
+    "pinTitle": "Housewife by Tate McRae"
+  },
+  "message": "created pin \"Housewife by Tate McRae\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-16T18:59:33.340Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-16"
+}
