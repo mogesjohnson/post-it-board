@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-16",
+    "pin": "Tesla Model Y specs",
+    "title": "Summary",
+    "body": "Model Y Hardware 3 has 8GB LPDDR4 per chip (16GB total). - AI Five targets 96GB memory in production."
+  },
+  "matched": {
+    "dayId": "eb02b5ed-6b45-4ab8-b5c8-ac01a93f85d1",
+    "pinId": "967928cf-9477-4e50-a006-39fefe0d2fad",
+    "pageId": "685697dd-48c4-46cf-a035-1483f0e2a391",
+    "pinTitle": "Tesla Model Y specs"
+  },
+  "message": "created day 2026-10-16; created pin \"Tesla Model Y specs\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-16T18:59:07.545Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-16"
+}
