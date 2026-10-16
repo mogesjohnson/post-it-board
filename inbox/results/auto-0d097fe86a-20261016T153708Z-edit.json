@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "edit",
+  "input": {
+    "op": "edit",
+    "target": "page",
+    "date": "2026-10-16",
+    "pin": "Tesla Model Y specs",
+    "pageNumber": 1,
+    "body": "Tesla Model Y specs\nHardware 3 has 8GB LPDDR4 per chip (16GB total).\nAI Five targets 96GB memory in production.\n\nCorrection:\n3 Lite is installed on Hardware 3.\n5 and was originally intended for HW4 + HW3 with AMD chips.\nIntel-based Hardware 3s do not support Halloween Mode despite having FSD features.\n3 Lite'."
+  },
+  "matched": {
+    "dayId": "eb02b5ed-6b45-4ab8-b5c8-ac01a93f85d1",
+    "pinId": "967928cf-9477-4e50-a006-39fefe0d2fad",
+    "pageId": "685697dd-48c4-46cf-a035-1483f0e2a391",
+    "pinTitle": "Tesla Model Y specs"
+  },
+  "message": "Updated page 1 of pin \"Tesla Model Y specs\".",
+  "processedAt": "2026-10-16T19:01:19.794Z",
+  "pageNumber": 1,
+  "date": "2026-10-16"
+}
