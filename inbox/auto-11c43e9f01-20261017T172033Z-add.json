@@ -1,0 +1,7 @@
+{
+  "op": "add",
+  "date": "2026-10-17",
+  "pin": "Brake Confirm Feature",
+  "title": "Summary",
+  "body": "- New update requires pedal release before self-driving starts.\n- Regenerative braking differs from emergency brake activation.\n- Turning off Brake Confirm skips the extra step only if detection works."
+}
