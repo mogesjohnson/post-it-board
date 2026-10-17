@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-17",
+    "pin": "Route plan",
+    "title": "Summary",
+    "body": "- Route starts at Sheetz.\n- Next stop is Regal River Ridge.\n7 miles.\n- Estimated travel time: 6 minutes."
+  },
+  "matched": {
+    "dayId": "78503996-e605-4ae4-8503-a997d810c888",
+    "pinId": "cc4ca1c0-dea0-4a55-bf3b-73dbefc7ae5e",
+    "pageId": "82a3df21-2172-49c6-b569-9fd756e02557",
+    "pinTitle": "Route plan"
+  },
+  "message": "created pin \"Route plan\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-17T22:13:29.603Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-17"
+}
