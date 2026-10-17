@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-17",
+    "pin": "Brake Confirm Feature",
+    "title": "Summary",
+    "body": "- New update requires pedal release before self-driving starts.\n- Regenerative braking differs from emergency brake activation.\n- Turning off Brake Confirm skips the extra step only if detection works."
+  },
+  "matched": {
+    "dayId": "78503996-e605-4ae4-8503-a997d810c888",
+    "pinId": "2eccd2ed-025c-4dce-9e8d-253c566c157b",
+    "pageId": "f524246f-ee52-4503-b792-ed0221e886d3",
+    "pinTitle": "Brake Confirm Feature"
+  },
+  "message": "created day 2026-10-17; created pin \"Brake Confirm Feature\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-17T22:13:13.785Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-17"
+}
