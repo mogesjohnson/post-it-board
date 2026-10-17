@@ -1,0 +1,7 @@
+{
+  "op": "add",
+  "date": "2026-10-17",
+  "pin": "Autopilot limitations",
+  "title": "Summary",
+  "body": "- Autopilot provided basic highway assistance like speed matching and lane centering but lacked city driving features.\n- It was discontinued because regulators deemed its name misleading rather than due to safety concerns.\n3 Lite introduced known issues including camera glare causing steering wheel warnings."
+}
