@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "edit",
+  "input": {
+    "op": "edit",
+    "target": "page",
+    "date": "2026-10-16",
+    "pin": "Tesla Model Y specs",
+    "pageNumber": 1,
+    "body": "Tesla Model Y specs\nHardware 3 uses 8GB LPDDR4 per chip (16GB total), while AI Five targets 96GB memory in production.\n\nCorrection:\n- Hardware 3 Lite is installed on Hardware 3.\n- 3 Lite does not mention pothole avoidance; it lists as an upcoming improvement for the fourteen point three branch.\n- Halloween Mode is brand new, debuting October sixth in update twenty twenty-six point thirty-eight point three.\n- Coding team size: Engineering comprises roughly nine thousand six hundred professional profiles (~16% of company). Lars Moravy oversees more than six thousand engineers/technicians/analysts.\n- Software/AI team size: Musk stated around three hundred engineers, two hundred on software, one hundred on chips, plus five hundred data labelers six years ago. Ashok Elluswamy's AI org has grown beyond this to cover FSD, Robotaxi, Optimus, and silicon/software groups."
+  },
+  "matched": {
+    "dayId": "eb02b5ed-6b45-4ab8-b5c8-ac01a93f85d1",
+    "pinId": "967928cf-9477-4e50-a006-39fefe0d2fad",
+    "pageId": "685697dd-48c4-46cf-a035-1483f0e2a391",
+    "pinTitle": "Tesla Model Y specs"
+  },
+  "message": "Updated page 1 of pin \"Tesla Model Y specs\".",
+  "processedAt": "2026-10-17T22:12:58.481Z",
+  "pageNumber": 1,
+  "date": "2026-10-16"
+}
