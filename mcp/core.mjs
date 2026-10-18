@@ -1,0 +1,198 @@
+// Read-only MCP server for the Post-it Board: lets an MCP client (Grok custom connector, xAI API remote MCP tool,
+// Claude, Cursor, ...) look up a topic folder by name and read its living summary and notes.
+//
+// Transport: MCP "Streamable HTTP" (JSON-RPC 2.0 over POST, JSON responses, no SSE stream, stateless).
+// Runtime-neutral: handleMcp(Request) -> Response uses only web-standard Request/Response/fetch, so the same core can
+// run in Node 18+ (mcp/node.mjs), a Supabase Edge Function (Deno) or a Cloudflare Worker. NOT DEPLOYED anywhere.
+//
+// Data: the board's PUBLIC, read-only Supabase REST API with the anon key (the same data anyone can already see on
+// https://mogesjohnson.github.io/post-it-board/). It only ever sends GET requests; a non-anon key is refused.
+// Tools: list_topics, get_topic, search_notes. No tool can write.
+
+export const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"];
+export const SERVER_INFO = { name: "post-it-board", title: "Post-it Board (read-only)", version: "0.1.0" };
+const SITE = "https://mogesjohnson.github.io/post-it-board/";
+const SELECT = "pins?select=id,title,color,created_at,updated_at,day:days(board_date),pages(id,title,body,position,created_at,updated_at)";
+
+function b64urlJson(part) {
+  try {
+    const s = part.replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(typeof atob === "function" ? atob(s + "=".repeat((4 - (s.length % 4)) % 4)) : Buffer.from(s, "base64").toString("utf8"));
+  } catch { return null; }
+}
+// only the public anon key (or a new-style publishable key) is ever accepted: this server must never be able to write
+export function assertAnonKey(key) {
+  const k = String(key || "");
+  if (k.startsWith("sb_publishable_")) return true;
+  const payload = b64urlJson(k.split(".")[1] || "");
+  if (payload && payload.role === "anon") return true;
+  throw new Error("board key is not the public anon key; refusing to use it");
+}
+
+export const TOOLS = [
+  {
+    name: "list_topics",
+    title: "List topic folders",
+    description: "List the topic folders on the user's Post-it Board (one folder per topic, most recently updated first) with " +
+      "note count, last update and the first line of the summary. Optional `query` filters by folder name (every word must appear).",
+    inputSchema: { type: "object", properties: { query: { type: "string", description: "Words in the folder name, e.g. 'garden'" }, limit: { type: "integer", minimum: 1, maximum: 100, default: 25 } }, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: "get_topic",
+    title: "Open a topic folder",
+    description: "Open one topic folder by name or slug and return everything in it: the living summary (merged from every past " +
+      "conversation on the topic) and the other notes with their dates. Use this when the user asks what was said or decided " +
+      "about something before. If the name is not exact, the closest folder name is used and the alternatives are listed.",
+    inputSchema: { type: "object", properties: { name: { type: "string", description: "Folder name or slug, e.g. 'Garden Beds' or 'garden-beds'" } }, required: ["name"], additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: "search_notes",
+    title: "Search notes",
+    description: "Full-text search over folder names, summaries and notes. Returns matching folders with a short snippet. " +
+      "Use when the user mentions a detail but not the topic name.",
+    inputSchema: { type: "object", properties: { query: { type: "string", minLength: 1 }, limit: { type: "integer", minimum: 1, maximum: 50, default: 10 } }, required: ["query"], additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+];
+
+const fold = s => String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const words = s => fold(s).split(/[^a-z0-9]+/).filter(w => w.length > 1);
+const firstLine = s => (String(s || "").split("\n").map(l => l.replace(/^\s*[-*•]\s*/, "").trim()).find(Boolean) || "");
+const clip = (s, n) => (s.length <= n ? s : s.slice(0, n - 1).trimEnd() + "…");
+const link = t => `${SITE}#view=topics&topic=${encodeURIComponent(t.slug)}`;
+const folderLine = t => ({ name: t.title, slug: t.slug, notes: t.page_count, updated_at: t.updated_at || null, day: t.board_date || null, summary_start: clip(firstLine(t.summary), 140), link: link(t) });
+
+// closest folder for a name that isn't an exact slug/name: most shared words (ties: most recently updated)
+function closest(topics, name) {
+  const q = new Set(words(name));
+  if (!q.size) return [];
+  return topics.map(t => ({ t, score: words(t.title).filter(w => q.has(w) || [...q].some(x => x.length > 3 && (w.startsWith(x) || x.startsWith(w)))).length }))
+    .filter(x => x.score > 0).sort((a, b) => b.score - a.score).map(x => x.t);
+}
+
+export function createBoardSource({ url, anonKey, fetchFn = fetch, ttlMs = 60_000, topicsApi, now = Date.now }) {
+  if (!url) throw new Error("board Supabase URL is not set");
+  assertAnonKey(anonKey);
+  let cache = null;
+  return {
+    async topics() {
+      if (cache && now() - cache.at < ttlMs) return cache.topics;
+      const res = await fetchFn(`${url.replace(/\/+$/, "")}/rest/v1/${SELECT}`, { method: "GET", headers: { apikey: anonKey, authorization: `Bearer ${anonKey}`, accept: "application/json" } });
+      if (!res.ok) throw new Error(`board read failed: HTTP ${res.status}`);
+      const rows = await res.json();
+      if (!Array.isArray(rows)) throw new Error("board read: unexpected response");
+      cache = { at: now(), topics: topicsApi.fromRows(rows) };
+      return cache.topics;
+    },
+  };
+}
+
+export function createTools({ source, topicsApi }) {
+  return {
+    async list_topics({ query = "", limit = 25 } = {}) {
+      const all = await source.topics();
+      const shown = topicsApi.filterByName(all, query).slice(0, Math.max(1, Math.min(100, limit | 0 || 25)));
+      return { total: all.length, matched: topicsApi.filterByName(all, query).length, folders: shown.map(folderLine) };
+    },
+    async get_topic({ name } = {}) {
+      if (!name || typeof name !== "string") throw new ToolInputError("`name` is required");
+      const all = await source.topics();
+      let t = topicsApi.findBySlug(all, name) || all.find(x => fold(x.title).trim() === fold(name).trim());
+      const near = closest(all, name);
+      let matchedBy = "exact";
+      if (!t) { t = near[0] || null; matchedBy = "closest"; }
+      if (!t) return { found: false, message: `No topic folder matches "${name}".`, folders: all.slice(0, 25).map(x => x.title) };
+      return {
+        found: true, matched_by: matchedBy,
+        folder: { name: t.title, slug: t.slug, day: t.board_date || null, updated_at: t.updated_at || null, notes: t.page_count, link: link(t) },
+        summary: { title: t.page_title || "Summary", updated_at: t.summary_updated_at || null, text: t.summary },
+        notes: t.notes.map(n => ({ page: n.number, title: n.title || null, created_at: n.created_at || null, updated_at: n.updated_at || null, text: n.body })),
+        other_matches: near.filter(x => x !== t).slice(0, 5).map(x => x.title),
+      };
+    },
+    async search_notes({ query, limit = 10 } = {}) {
+      const q = words(query);
+      if (!q.length) throw new ToolInputError("`query` needs at least one word");
+      const all = await source.topics();
+      const hits = [];
+      for (const t of all) {
+        const docs = [{ where: "name", text: t.title, w: 3 }, { where: "summary", text: t.summary, w: 2 }, ...t.notes.map(n => ({ where: `page ${n.number}`, text: `${n.title}\n${n.body}`, w: 1 }))];
+        let score = 0, best = null;
+        for (const d of docs) {
+          const dw = words(d.text);
+          const n = q.filter(x => dw.some(w => w === x || (x.length > 3 && w.startsWith(x)))).length;
+          if (n) { score += n * d.w; if (!best || n * d.w > best.s) best = { s: n * d.w, d }; }
+        }
+        if (!score) continue;
+        const text = String(best.d.text), i = fold(text).search(new RegExp(q.map(x => x.replace(/[^a-z0-9]/g, "")).join("|")));
+        const snippet = clip(text.slice(Math.max(0, i - 60)).replace(/\s+/g, " ").trim(), 200);
+        hits.push({ score, folder: t.title, slug: t.slug, where: best.d.where, snippet: (i > 60 ? "…" : "") + snippet, updated_at: t.updated_at || null, link: link(t) });
+      }
+      hits.sort((a, b) => b.score - a.score || String(b.updated_at).localeCompare(String(a.updated_at)));
+      return { query, results: hits.slice(0, Math.max(1, Math.min(50, limit | 0 || 10))) };
+    },
+  };
+}
+
+export class ToolInputError extends Error {}
+const rpcError = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
+
+// one JSON-RPC message -> response object, or null for a notification
+export async function dispatch(msg, tools) {
+  if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return rpcError(msg?.id, -32600, "Invalid Request");
+  const isNotification = !("id" in msg);
+  const { id, method, params = {} } = msg;
+  if (isNotification) return null; // notifications/initialized, notifications/cancelled, ...
+  switch (method) {
+    case "initialize": {
+      const asked = params.protocolVersion;
+      return { jsonrpc: "2.0", id, result: {
+        protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: SERVER_INFO,
+        instructions: "The user's Post-it Board: one folder per topic, each with a living summary of past conversations. " +
+          "When the user asks about something discussed before, call get_topic with the topic name (or list_topics / search_notes to find it). Read-only.",
+      } };
+    }
+    case "ping": return { jsonrpc: "2.0", id, result: {} };
+    case "tools/list": return { jsonrpc: "2.0", id, result: { tools: TOOLS } };
+    case "tools/call": {
+      const fn = tools[params.name];
+      if (!fn || !TOOLS.some(t => t.name === params.name)) return rpcError(id, -32602, `Unknown tool: ${params.name}`);
+      try {
+        const out = await fn(params.arguments || {});
+        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out, isError: false } };
+      } catch (e) {
+        // tool errors are results the model can read (MCP spec), not protocol errors
+        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: e instanceof ToolInputError ? e.message : `Board unavailable: ${e.message}` }], isError: true } };
+      }
+    }
+    default: return rpcError(id, -32601, `Method not found: ${method}`);
+  }
+}
+
+// HTTP handler. Options: path ("/mcp"; may include a secret segment), bearerToken (optional), allowedOrigins (list, or "*").
+export function createMcpHandler({ tools, path = "/mcp", bearerToken = "", allowedOrigins = [] }) {
+  const json = (status, body, extra = {}) => new Response(body === null ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json", ...extra } });
+  return async function handleMcp(req) {
+    const url = new URL(req.url);
+    if (url.pathname.replace(/\/+$/, "") !== path.replace(/\/+$/, "")) return json(404, { error: "not found" });
+    // DNS-rebinding guard from the MCP spec: browsers send Origin; only listed origins may call
+    const origin = req.headers.get("origin");
+    if (origin && allowedOrigins !== "*" && !allowedOrigins.includes(origin)) return json(403, { error: "origin not allowed" });
+    if (bearerToken && req.headers.get("authorization") !== `Bearer ${bearerToken}`) return json(401, rpcError(null, -32001, "Unauthorized"), { "www-authenticate": "Bearer" });
+    if (req.method === "GET") return json(405, { error: "this server does not offer an SSE stream" }, { allow: "POST" });
+    if (req.method === "DELETE") return json(405, { error: "stateless server: no session to end" }, { allow: "POST" });
+    if (req.method !== "POST") return json(405, { error: "method not allowed" }, { allow: "POST" });
+    let body;
+    try { body = await req.json(); } catch { return json(400, rpcError(null, -32700, "Parse error")); }
+    if (Array.isArray(body)) {
+      const out = (await Promise.all(body.map(m => dispatch(m, tools)))).filter(Boolean);
+      return out.length ? json(200, out) : new Response(null, { status: 202 });
+    }
+    const out = await dispatch(body, tools);
+    return out ? json(200, out) : new Response(null, { status: 202 });
+  };
+}
