@@ -1,0 +1,37 @@
+{
+  "_comment": "SYNTHETIC demo board (fictional people and plans) for the Topics folder view browser check. Loaded into the demo (localStorage) store; never real notes.",
+  "days": [
+    { "id": "d1", "board_date": "2026-10-04", "title": null, "created_at": "2026-10-04T13:00:00Z" },
+    { "id": "d2", "board_date": "2026-10-09", "title": null, "created_at": "2026-10-09T13:00:00Z" },
+    { "id": "d3", "board_date": "2026-10-16", "title": "Weekend", "created_at": "2026-10-16T13:00:00Z" }
+  ],
+  "pins": [
+    { "id": "p-garden", "day_id": "d1", "title": "Garden Beds", "color": "green", "position": 0, "created_at": "2026-10-04T13:05:00Z", "updated_at": "2026-10-04T13:05:00Z" },
+    { "id": "p-party", "day_id": "d2", "title": "Nora's 10th Birthday", "color": "pink", "position": 0, "created_at": "2026-10-09T14:00:00Z", "updated_at": "2026-10-09T14:00:00Z" },
+    { "id": "p-shelves", "day_id": "d2", "title": "Garage Shelves", "color": "yellow", "position": 1, "created_at": "2026-10-09T15:00:00Z", "updated_at": "2026-10-09T15:00:00Z" },
+    { "id": "p-podcast", "day_id": "d1", "title": "Bike podcast", "color": "blue", "position": 1, "created_at": "2026-10-04T15:00:00Z", "updated_at": "2026-10-04T15:00:00Z" },
+    { "id": "p-errands1", "day_id": "d1", "title": "Weekend errands", "color": "yellow", "position": 2, "created_at": "2026-10-04T16:00:00Z", "updated_at": "2026-10-04T16:00:00Z" },
+    { "id": "p-errands2", "day_id": "d3", "title": "Weekend errands", "color": "green", "position": 0, "created_at": "2026-10-16T16:00:00Z", "updated_at": "2026-10-16T16:00:00Z" },
+    { "id": "p-empty", "day_id": "d3", "title": "Porch repaint", "color": "blue", "position": 1, "created_at": "2026-10-16T17:00:00Z", "updated_at": "2026-10-16T17:00:00Z" }
+  ],
+  "pages": [
+    { "id": "g-garden-1", "pin_id": "p-garden", "title": "Summary", "position": 0, "created_at": "2026-10-04T13:05:00Z", "updated_at": "2026-10-17T18:20:00Z",
+      "body": "- Two cedar beds on the south side, 4 x 8 ft each.\n- Tomatoes and basil in bed 1; peppers and zucchini in bed 2.\n- Soil delivery booked for Saturday morning.\n- To do: buy drip-line kit and mulch." },
+    { "id": "g-garden-2", "pin_id": "p-garden", "title": "Chat: soil and compost", "position": 1, "created_at": "2026-10-06T19:00:00Z", "updated_at": "2026-10-06T19:00:00Z",
+      "body": "Mix 60% topsoil and 40% compost. About 32 cubic feet per bed." },
+    { "id": "g-garden-3", "pin_id": "p-garden", "title": "Chat: watering", "position": 2, "created_at": "2026-10-12T08:30:00Z", "updated_at": "2026-10-13T09:00:00Z",
+      "body": "Drip line on a timer, 20 minutes every other morning." },
+    { "id": "g-party-1", "pin_id": "p-party", "title": "Summary", "position": 0, "created_at": "2026-10-09T14:00:00Z", "updated_at": "2026-10-15T20:00:00Z",
+      "body": "- Pool party at the community pool on the 14th, about twelve kids.\n- Chocolate cake from the bakery downtown.\n- Invitations out by Friday." },
+    { "id": "g-party-2", "pin_id": "p-party", "title": "Chat: goodie bags", "position": 1, "created_at": "2026-10-11T17:00:00Z", "updated_at": "2026-10-11T17:00:00Z",
+      "body": "Goodie bags: goggles, glow sticks and a small toy." },
+    { "id": "g-shelves-1", "pin_id": "p-shelves", "title": "Summary", "position": 0, "created_at": "2026-10-09T15:00:00Z", "updated_at": "2026-10-09T15:00:00Z",
+      "body": "- Three shelves on the left wall, 16 inches deep.\n- Eight 2x4s, two plywood sheets, brackets, screws.\n- Borrow Sam's stud finder." },
+    { "id": "g-podcast-1", "pin_id": "p-podcast", "title": "Summary", "position": 0, "created_at": "2026-10-04T15:00:00Z", "updated_at": "2026-10-04T15:00:00Z",
+      "body": "Episode ideas: commuting tips, a history of the derailleur, bike-packing gear." },
+    { "id": "g-errands1-1", "pin_id": "p-errands1", "title": "Summary", "position": 0, "created_at": "2026-10-04T16:00:00Z", "updated_at": "2026-10-04T16:00:00Z",
+      "body": "Dry cleaning, library books, car wash." },
+    { "id": "g-errands2-1", "pin_id": "p-errands2", "title": "Summary", "position": 0, "created_at": "2026-10-16T16:00:00Z", "updated_at": "2026-10-16T16:00:00Z",
+      "body": "Hardware store: batteries and lightbulbs. Post office: mail the passport forms." }
+  ]
+}

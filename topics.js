@@ -1,9 +1,10 @@
 /* Post-it Board — Topics view helpers (pure functions, no DOM; also loaded by the node tests).
  *
- * A topic is a pin; its page 1 (first page by position, then created_at) is the topic's living summary.
- * The Topics view lists every pin across all days, most recently updated first, where "updated" is the
- * latest updated_at/created_at of the pin itself or any of its pages (the database keeps updated_at
- * current with triggers, so an edited page 1 moves its topic to the top).
+ * A topic is a pin, shown as a FOLDER in the Topics view; its page 1 (first page by position, then created_at) is
+ * the topic's living summary and its other pages are the notes filed in that folder. The Topics view lists every
+ * pin across all days, most recently updated first, where "updated" is the latest updated_at/created_at of the pin
+ * itself or any of its pages (the database keeps updated_at current with triggers, so an edited page 1 moves its
+ * topic to the top). Folders have a URL slug (#view=topics&topic=<slug>) and can be searched by name.
  */
 (function (root) {
   "use strict";
@@ -12,18 +13,44 @@
   function byPos(a, b) {
     return (a.position || 0) - (b.position || 0) || String(a.created_at || "").localeCompare(String(b.created_at || ""));
   }
-  // latest change of the pin or any of its pages, as an ISO string ("" if none known)
-  function lastUpdated(pin) {
+  function latest(rows) {
     var best = 0, iso = "";
-    [pin].concat(pin.pages || []).forEach(function (r) {
+    rows.forEach(function (r) {
       [r.updated_at, r.created_at].forEach(function (v) { var t = ts(v); if (t > best) { best = t; iso = v; } });
     });
     return iso;
   }
-  // rows: [{id, title, color, created_at, updated_at, day: {board_date} | board_date, pages: [{title, body, position, ...}]}]
-  // -> [{id, title, color, board_date, updated_at, summary, page_title, page_count}] newest first
+  // latest change of the pin or any of its pages, as an ISO string ("" if none known)
+  function lastUpdated(pin) { return latest([pin].concat(pin.pages || [])); }
+
+  // folder name -> URL slug: "Nora's 10th Party!" -> "noras-10th-party" (accents folded, emoji dropped)
+  function slugify(s) {
+    var out = String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return out.slice(0, 60).replace(/-+$/, "") || "topic";
+  }
+  // two pins with the same name (on different days) get "-<first 6 chars of the id>" (the whole id if that still
+  // clashes) so every slug is unique and stays the same when other folders come and go
+  function assignSlugs(topics) {
+    var count = {};
+    topics.forEach(function (t) { var s = slugify(t.title); count[s] = (count[s] || 0) + 1; });
+    var idPart = function (t, n) { var x = String(t.id).replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); return n ? x.slice(0, n) : x; };
+    topics.forEach(function (t) {
+      var s = slugify(t.title);
+      if (count[s] < 2) { t.slug = s; return; }
+      // ids are UUIDs, so 6 characters are almost always enough; if two same-name pins share them, use the whole id
+      var short = idPart(t, 6);
+      var clash = topics.some(function (o) { return o !== t && slugify(o.title) === s && idPart(o, 6) === short; });
+      t.slug = s + "-" + (clash ? idPart(t) : short);
+    });
+    return topics;
+  }
+
+  // rows: [{id, title, color, created_at, updated_at, day: {board_date} | board_date, pages: [{id, title, body, position, ...}]}]
+  // -> [{id, title, slug, color, board_date, updated_at, summary, page_title, page_count, notes}] newest first
+  //    notes = pages 2..n (the folder's other notes), each {id, number, title, body, created_at, updated_at}
   function fromRows(rows) {
-    return (rows || []).map(function (p) {
+    return assignSlugs((rows || []).map(function (p) {
       var pages = (p.pages || []).slice().sort(byPos);
       var first = pages[0] || null;
       return {
@@ -34,9 +61,13 @@
         updated_at: lastUpdated(p),
         summary: first ? String(first.body || "") : "",
         page_title: first ? first.title || "" : "",
+        summary_updated_at: first ? latest([first]) : "",
         page_count: pages.length,
+        notes: pages.slice(1).map(function (g, i) {
+          return { id: g.id, number: i + 2, title: g.title || "", body: String(g.body || ""), created_at: g.created_at || "", updated_at: latest([g]) };
+        }),
       };
-    }).sort(compare);
+    }).sort(compare));
   }
   // newest update first; ties: newer day first, then title, then id (stable across reloads)
   function compare(a, b) {
@@ -46,7 +77,26 @@
       String(a.id).localeCompare(String(b.id));
   }
 
-  var api = { fromRows: fromRows, lastUpdated: lastUpdated, compare: compare };
+  function fold(s) { return String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
+  // search by folder name: every word of the query must appear in the name (case/accent-insensitive); order kept
+  function filterByName(topics, query) {
+    var words = fold(query).split(/\s+/).filter(Boolean);
+    if (!words.length) return (topics || []).slice();
+    return (topics || []).filter(function (t) {
+      var name = fold(t.title);
+      return words.every(function (w) { return name.indexOf(w) >= 0; });
+    });
+  }
+  // deep link: exact slug first, then a pin id, then a folder whose name slugifies to the same thing
+  function findBySlug(topics, slug) {
+    if (!slug) return null;
+    var s = String(slug).toLowerCase();
+    return (topics || []).find(function (t) { return t.slug === s; }) ||
+      (topics || []).find(function (t) { return t.id === slug; }) ||
+      (topics || []).find(function (t) { return slugify(t.title) === slugify(slug); }) || null;
+  }
+
+  var api = { fromRows: fromRows, lastUpdated: lastUpdated, compare: compare, slugify: slugify, assignSlugs: assignSlugs, filterByName: filterByName, findBySlug: findBySlug };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PostItTopics = api;
 })(typeof window !== "undefined" ? window : this);
