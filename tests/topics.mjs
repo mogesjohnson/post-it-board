@@ -56,5 +56,48 @@ test("empty / bad input", () => {
   assert.equal(T.lastUpdated({ updated_at: "nonsense" }), "");
 });
 
+test("folders: every page after page 1 is a note in the folder, with its number, title, body and dates", () => {
+  const t = T.fromRows([pin("p", "Garden Beds", "2026-10-05", "2026-10-05T00:00:00Z", "2026-10-05T00:00:00Z", [
+    page("g3", 2, "2026-10-07T09:00:00Z", "2026-10-09T10:00:00Z", "third", "Soil delivery"),
+    page("g1", 0, "2026-10-05T01:00:00Z", "2026-10-11T08:00:00Z", "living summary"),
+    page("g2", 1, "2026-10-06T09:00:00Z", null, "second", null),
+  ])])[0];
+  assert.equal(t.summary, "living summary"); assert.equal(t.summary_updated_at, "2026-10-11T08:00:00Z");
+  assert.equal(t.page_count, 3);
+  assert.deepEqual(t.notes, [
+    { id: "g2", number: 2, title: "", body: "second", created_at: "2026-10-06T09:00:00Z", updated_at: "2026-10-06T09:00:00Z" },
+    { id: "g3", number: 3, title: "Soil delivery", body: "third", created_at: "2026-10-07T09:00:00Z", updated_at: "2026-10-09T10:00:00Z" },
+  ]);
+  const empty = T.fromRows([pin("e", "Empty", "2026-10-05", "2026-10-05T00:00:00Z", "2026-10-05T00:00:00Z")])[0];
+  assert.deepEqual(empty.notes, []); assert.equal(empty.summary_updated_at, "");
+});
+
+test("folders: slugs are URL-safe, accent/emoji-free, and unique (same name on two days gets an id suffix)", () => {
+  assert.equal(T.slugify("Nora's 10th Birthday!"), "noras-10th-birthday");
+  assert.equal(T.slugify("  Café — Menü 📌 "), "cafe-menu");
+  assert.equal(T.slugify("📌📌"), "topic");
+  assert.equal(T.slugify("x".repeat(100)).length, 60);
+  const same = "2026-10-05T00:00:00Z";
+  const t = T.fromRows([pin("abc123def", "Weekend errands", "2026-10-04", same, same), pin("zzz999yyy", "Weekend Errands", "2026-10-05", same, same), pin("q", "Garden", "2026-10-05", same, same)]);
+  assert.deepEqual(t.map(x => x.slug).sort(), ["garden", "weekend-errands-abc123", "weekend-errands-zzz999"]);
+  const clash = T.fromRows([pin("p-errands1", "Errands", "2026-10-04", same, same), pin("p-errands2", "Errands", "2026-10-05", same, same)]);
+  assert.deepEqual(clash.map(x => x.slug).sort(), ["errands-perrands1", "errands-perrands2"], "same 6-char prefix -> whole id");
+});
+
+test("folders: search by name (every word, any order, case/accent-insensitive); deep link by slug, id or name", () => {
+  const same = "2026-10-05T00:00:00Z";
+  const t = T.fromRows([pin("a", "Garden Beds", "2026-10-05", same, same), pin("b", "Garage Shelves", "2026-10-04", same, same), pin("c", "Café plans", "2026-10-03", same, same)]);
+  assert.deepEqual(T.filterByName(t, "gar").map(x => x.title), ["Garden Beds", "Garage Shelves"]);
+  assert.deepEqual(T.filterByName(t, "beds GARDEN").map(x => x.title), ["Garden Beds"]);
+  assert.deepEqual(T.filterByName(t, "cafe").map(x => x.title), ["Café plans"]);
+  assert.equal(T.filterByName(t, "  ").length, 3);
+  assert.deepEqual(T.filterByName(t, "summary text"), [], "name only, not the summary");
+  assert.equal(T.findBySlug(t, "garage-shelves").id, "b");
+  assert.equal(T.findBySlug(t, "GARAGE-SHELVES").id, "b");
+  assert.equal(T.findBySlug(t, "c").title, "Café plans", "a pin id works too");
+  assert.equal(T.findBySlug(t, "Garden Beds").id, "a", "a plain name works too");
+  assert.equal(T.findBySlug(t, "nope"), null); assert.equal(T.findBySlug(t, ""), null);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

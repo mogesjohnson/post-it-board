@@ -14,6 +14,9 @@
     view: "days",     // "days" = one day's board; "topics" = every pin across all days, newest update first
     topics: [],
     fromTopics: false, // the opened pin was picked in the Topics view: "back" returns there
+    topicQuery: "",          // Topics view: folder-name search
+    openFolders: new Set(),  // Topics view: expanded folders (pin ids)
+    topicSlug: null,         // Topics view: the folder in the URL (#view=topics&topic=<slug>)
     pages: [],
     pageIdx: 0,
     selecting: false,
@@ -69,15 +72,15 @@
   function currentDay() { return state.days.find(function (d) { return d.id === state.dayId; }); }
   function currentPin() { return state.pins.find(function (p) { return p.id === state.pinId; }); }
 
-  /* ---------- URL hash: #day=YYYY-MM-DD&pin=<id>&page=N  ·  #view=topics  ·  ...&from=topics ---------- */
+  /* ---------- URL hash: #day=YYYY-MM-DD&pin=<id>&page=N  ·  #view=topics[&topic=<slug>]  ·  ...&from=topics ---------- */
   function readHash() {
     var q = new URLSearchParams(location.hash.replace(/^#/, ""));
     return { day: q.get("day"), pin: q.get("pin"), page: parseInt(q.get("page") || "1", 10) || 1,
-      view: q.get("view") === "topics" ? "topics" : "days", from: q.get("from") };
+      view: q.get("view") === "topics" ? "topics" : "days", from: q.get("from"), topic: q.get("topic") };
   }
   function writeHash() {
     var d = currentDay(), q = new URLSearchParams();
-    if (state.view === "topics" && !state.pinId) q.set("view", "topics");
+    if (state.view === "topics" && !state.pinId) { q.set("view", "topics"); if (state.topicSlug) q.set("topic", state.topicSlug); }
     else if (d) q.set("day", d.board_date);
     if (state.pinId) { q.set("pin", state.pinId); q.set("page", String(state.pageIdx + 1)); if (state.fromTopics) q.set("from", "topics"); }
     var h = "#" + q.toString();
@@ -125,12 +128,18 @@
     render();
   }
 
-  // Topics view: every pin across all days. focusId = the topic to focus when coming back from it.
-  async function showTopics(focusId) {
+  // Topics view: every pin across all days, as folders. focusId = the topic to focus when coming back from it;
+  // slug = a deep link (#view=topics&topic=<slug>): that folder is opened and scrolled to.
+  async function showTopics(focusId, slug) {
     var seq = ++navSeq;
     var topics = await store.listTopics();
     if (seq !== navSeq) return;
     state.topics = topics;
+    if (slug) {
+      var t = window.PostItTopics.findBySlug(topics, slug);
+      if (t) { state.openFolders.add(t.id); state.topicSlug = t.slug; focusId = t.id; state.topicQuery = ""; }
+      else { state.topicSlug = null; toast("No topic folder called “" + slug + "”."); }
+    }
     state.view = "topics"; state.fromTopics = false;
     state.pinId = null; state.pages = []; state.pageIdx = 0;
     state.selPins.clear(); state.selPages.clear();
@@ -146,7 +155,7 @@
     loadPins().then(render).catch(fail); // the day may have changed while in Topics
   }
   // Open a topic on its own day, so editing and "back" behave like the day view; "back" returns to Topics.
-  async function openTopic(t) {
+  async function openTopic(t, pageIdx) {
     var day = state.days.find(function (d) { return d.board_date === t.board_date; });
     if (!day) { await loadDays(t.board_date); day = state.days.find(function (d) { return d.board_date === t.board_date; }); }
     if (!day) throw new Error("That topic's day is gone — reload the page.");
@@ -155,7 +164,7 @@
     await loadPins();
     if (seq !== navSeq) return;
     state.fromTopics = true;
-    await openPin(t.id, 0, "back");
+    await openPin(t.id, pageIdx || 0, "back");
   }
 
   /* ---------- rendering ---------- */
@@ -265,26 +274,88 @@
     return list;
   }
 
+  // Topics view = a folder tree: one folder per topic (name, note count, last update). A folder opens to show the
+  // living summary (page 1) and the other notes filed in it, with dates; search filters folders by name.
   function renderTopics() {
     if (!state.topics.length) return emptyCard("No topics yet", canEdit() ? "Pin a topic on a day and it shows up here." : "Check back soon!");
-    var list = el("ul", { class: "topic-list", "aria-label": "Topics, most recently updated first" });
-    state.topics.forEach(function (t) {
-      list.appendChild(el("li", {
-        class: "topic-card paper-" + colorOf(t), tabindex: "0", role: "button", "data-focus": "topic:" + t.id,
-        "aria-label": "Open topic " + t.title,
-        onclick: function () { openTopic(t).catch(fail); },
-        onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
-      }, [
-        el("div", { class: "topic-head" }, [
-          el("h3", { text: t.title }),
-          el("time", { class: "topic-updated", datetime: t.updated_at, title: t.updated_at ? new Date(t.updated_at).toLocaleString() : null,
-            text: t.updated_at ? "Updated " + fmtStamp(t.updated_at) : "" }),
+    var count = el("span", { class: "folder-total", "aria-live": "polite" });
+    var tree = el("ul", { class: "folder-tree", "aria-label": "Topic folders, most recently updated first" });
+    var search = el("input", { type: "search", id: "folderSearch", class: "folder-search-input", placeholder: "Search folders by name…",
+      autocomplete: "off", spellcheck: "false", "data-focus": "topic-search", "aria-label": "Search topic folders by name",
+      oninput: function (e) { state.topicQuery = e.target.value; fillTree(tree, count); },
+      onkeydown: function (e) { if (e.key === "Escape" && e.target.value) { e.preventDefault(); e.target.value = ""; state.topicQuery = ""; fillTree(tree, count); } } });
+    search.value = state.topicQuery;
+    fillTree(tree, count);
+    return el("section", { class: "folders" }, [
+      el("div", { class: "folder-search" }, [el("span", { class: "folder-search-icon", "aria-hidden": "true", text: "🔍" }), search, count]),
+      tree,
+    ]);
+  }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function fillTree(tree, count) {
+    var all = state.topics, shown = window.PostItTopics.filterByName(all, state.topicQuery);
+    count.textContent = shown.length === all.length ? plural(all.length, "folder", "folders") : shown.length + " of " + plural(all.length, "folder", "folders");
+    tree.textContent = "";
+    if (!shown.length) { tree.appendChild(el("li", { class: "folder-none", text: "No folder name matches “" + state.topicQuery.trim() + "”." })); return; }
+    // two folders with the same name (pinned on different days): show the day so they can be told apart
+    var names = {};
+    all.forEach(function (t) { var k = String(t.title).trim().toLowerCase(); names[k] = (names[k] || 0) + 1; });
+    shown.forEach(function (t) { tree.appendChild(renderFolder(t, names[String(t.title).trim().toLowerCase()] > 1)); });
+  }
+  function toggleFolder(t) {
+    if (state.openFolders.has(t.id)) { state.openFolders.delete(t.id); if (state.topicSlug === t.slug) state.topicSlug = null; }
+    else { state.openFolders.add(t.id); state.topicSlug = t.slug; }
+    render();
+  }
+  function stampEl(cls, iso, prefix) {
+    return iso ? el("time", { class: cls, datetime: iso, title: new Date(iso).toLocaleString(), text: (prefix || "") + fmtStamp(iso) }) : null;
+  }
+  function renderFolder(t, sameName) {
+    var open = state.openFolders.has(t.id);
+    var bodyId = "folder-" + t.slug;
+    var row = el("button", { class: "folder-row", "aria-expanded": String(open), "aria-controls": bodyId, "data-focus": "topic:" + t.id,
+      title: open ? "Close folder" : "Open folder", onclick: function () { toggleFolder(t); } }, [
+      el("span", { class: "caret", "aria-hidden": "true", text: open ? "▾" : "▸" }),
+      el("span", { class: "folder-icon", "aria-hidden": "true", text: open ? "📂" : "📁" }),
+      el("span", { class: "folder-name", text: t.title }),
+      sameName && t.board_date ? el("span", { class: "folder-day-tag", text: fmtDate(t.board_date) }) : null,
+      el("span", { class: "folder-badge", text: plural(t.page_count, "note", "notes") }),
+      stampEl("folder-updated", t.updated_at, "Updated "),
+    ]);
+    var li = el("li", { class: "folder" + (open ? " open" : ""), "data-slug": t.slug }, [row]);
+    if (!open) return li;
+    var files = el("ul", { class: "folder-files", "aria-label": "Notes in " + t.title });
+    files.appendChild(el("li", { class: "file file-summary" }, [
+      el("div", { class: "file-head" }, [
+        el("span", { class: "file-icon", "aria-hidden": "true", text: "📌" }),
+        el("span", { class: "file-name", text: "Summary" + (t.page_title && t.page_title !== "Summary" ? " · " + t.page_title : "") }),
+        el("span", { class: "file-kind", text: "living summary of every chat on this topic" }),
+        stampEl("file-date", t.summary_updated_at, "Updated "),
+      ]),
+      el("div", { class: "file-body" + (t.summary ? "" : " none"), text: t.summary || "No summary yet." }),
+    ]));
+    t.notes.forEach(function (n) {
+      var edited = n.updated_at && n.created_at && fmtStamp(n.updated_at) !== fmtStamp(n.created_at);
+      files.appendChild(el("li", { class: "file" }, [
+        el("div", { class: "file-head" }, [
+          el("span", { class: "file-icon", "aria-hidden": "true", text: "📄" }),
+          el("span", { class: "file-name", text: "Page " + n.number + (n.title ? " · " + n.title : "") }),
+          stampEl("file-date", n.created_at || n.updated_at, ""),
+          edited ? stampEl("file-date edited", n.updated_at, "edited ") : null,
+          el("button", { class: "chip-btn file-open", text: "Open ›", "aria-label": "Open page " + n.number + " of " + t.title,
+            onclick: function () { openTopic(t, n.number - 1).catch(fail); } }),
         ]),
-        el("div", { class: "topic-meta", text: (t.board_date ? fmtDate(t.board_date) + " · " : "") + t.page_count + (t.page_count === 1 ? " page" : " pages") }),
-        el("div", { class: "topic-summary" + (t.summary ? "" : " none"), text: t.summary || "No summary yet." }),
+        el("div", { class: "file-body", text: n.body || "" }),
       ]));
     });
-    return list;
+    li.appendChild(el("div", { class: "folder-body", id: bodyId }, [
+      files,
+      el("div", { class: "folder-foot" }, [
+        el("span", { class: "folder-day", text: t.board_date ? "Pinned on " + fmtDate(t.board_date) : "" }),
+        el("button", { class: "chip-btn", text: "Open on its day ›", onclick: function () { openTopic(t, 0).catch(fail); } }),
+      ]),
+    ]));
+    return li;
   }
 
   function renderPinView() {
@@ -511,7 +582,10 @@
 
   async function route() {
     var h = readHash();
-    if (h.view === "topics" && !h.pin) { if (state.view !== "topics" || state.pinId) await showTopics(); return; }
+    if (h.view === "topics" && !h.pin) {
+      if (state.view !== "topics" || state.pinId || (h.topic || null) !== state.topicSlug) await showTopics(null, h.topic);
+      return;
+    }
     state.view = "days"; state.fromTopics = h.from === "topics" && !!h.pin;
     var day = h.day && state.days.find(function (d) { return d.board_date === h.day; });
     if (day && day.id !== state.dayId) { navSeq++; state.dayId = day.id; state.selPins.clear(); await loadPins(); }
@@ -545,7 +619,7 @@
     var h = readHash();
     try {
       await loadDays(h.day);
-      if (h.view === "topics" && !h.pin) await showTopics();
+      if (h.view === "topics" && !h.pin) await showTopics(null, h.topic);
       else {
         await loadPins();
         state.fromTopics = h.from === "topics" && !!h.pin;
