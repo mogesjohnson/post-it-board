@@ -173,7 +173,7 @@ export async function dispatch(msg, tools) {
   }
 }
 
-// HTTP handler. Options: path ("/mcp"; may include a secret segment), bearerToken (optional), allowedOrigins.
+// HTTP handler. Options: path ("/mcp"; may include a secret segment), bearerToken (optional), allowedOrigins (list, or "*").
 export function createMcpHandler({ tools, path = "/mcp", bearerToken = "", allowedOrigins = [] }) {
   const json = (status, body, extra = {}) => new Response(body === null ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json", ...extra } });
   return async function handleMcp(req) {
@@ -181,7 +181,7 @@ export function createMcpHandler({ tools, path = "/mcp", bearerToken = "", allow
     if (url.pathname.replace(/\/+$/, "") !== path.replace(/\/+$/, "")) return json(404, { error: "not found" });
     // DNS-rebinding guard from the MCP spec: browsers send Origin; only listed origins may call
     const origin = req.headers.get("origin");
-    if (origin && !allowedOrigins.includes(origin)) return json(403, { error: "origin not allowed" });
+    if (origin && allowedOrigins !== "*" && !allowedOrigins.includes(origin)) return json(403, { error: "origin not allowed" });
     if (bearerToken && req.headers.get("authorization") !== `Bearer ${bearerToken}`) return json(401, rpcError(null, -32001, "Unauthorized"), { "www-authenticate": "Bearer" });
     if (req.method === "GET") return json(405, { error: "this server does not offer an SSE stream" }, { allow: "POST" });
     if (req.method === "DELETE") return json(405, { error: "stateless server: no session to end" }, { allow: "POST" });

@@ -7,6 +7,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as M from "../mcp/core.mjs";
 import { topicsApi, serve } from "../mcp/node.mjs";
+import { createEdgeHandler } from "../supabase/functions/grok-mcp/handler.mjs";
+import { execFileSync } from "node:child_process";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = JSON.parse(fs.readFileSync(path.join(here, "fixtures/topics-demo.json"), "utf8"));
@@ -148,6 +150,33 @@ test("Node adapter: a real MCP round trip over HTTP on localhost", async () => {
     const g = await post({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_topic", arguments: { name: "Bike podcast" } } });
     assert.match(g.result.structuredContent.summary.text, /derailleur/);
   } finally { server.close(); }
+});
+
+test("Edge Function: secret path only, fails closed, anon key only, any Origin, generated copies fresh", async () => {
+  const SECRET = "A".repeat(10) + "b_c-" + "9".repeat(18);
+  const f = fakeFetch();
+  const mk = o => createEdgeHandler({ supabaseUrl: "https://example.supabase.co", anonKey: ANON, pathSecret: SECRET, topicsApi, fetchFn: f.fn, ...o });
+  const h = mk();
+  const post = (p, body = { jsonrpc: "2.0", id: 1, method: "tools/list" }, headers = {}) =>
+    h(new Request("http://x" + p, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }));
+  let r = await post(`/grok-mcp/${SECRET}`);
+  assert.equal(r.status, 200); assert.equal((await r.json()).result.tools.length, 3);
+  assert.equal((await post(`/functions/v1/grok-mcp/${SECRET}/`)).status, 200, "full path + trailing slash ok");
+  assert.equal((await post(`/grok-mcp/${SECRET}`, { jsonrpc: "2.0", id: 1, method: "ping" }, { origin: "https://grok.com" })).status, 200, "grok.com Origin allowed");
+  for (const p of ["/grok-mcp", "/grok-mcp/", "/grok-mcp/mcp", `/grok-mcp/${SECRET}x`, `/grok-mcp/${SECRET.slice(0, -1)}B`, `/grok-mcp/${SECRET}/mcp`, `/other/${SECRET}`])
+    assert.equal((await post(p)).status, 404, p);
+  assert.equal((await h(new Request(`http://x/grok-mcp/${SECRET}`))).status, 405, "GET -> 405");
+  for (const bad of [undefined, "", "short", "has space in it but long enough ok"]) {
+    const hb = mk({ pathSecret: bad });
+    assert.equal((await hb(new Request(`http://x/grok-mcp/${bad}`, { method: "POST", body: "{}" }))).status, 404, `secret ${bad} -> closed`);
+  }
+  assert.throws(() => mk({ anonKey: jwt("service_role") }), /not the public anon key/);
+  assert.ok(f.calls.every(c => c.method === "GET"));
+  const dir = path.join(here, "../supabase/functions/grok-mcp");
+  const index = fs.readFileSync(path.join(dir, "index.ts"), "utf8");
+  assert.ok(!/SERVICE_ROLE|console\./.test(index + fs.readFileSync(path.join(dir, "handler.mjs"), "utf8")), "never reads service role key, never logs");
+  assert.match(fs.readFileSync(path.join(here, "../supabase/config.toml"), "utf8"), /\[functions\.grok-mcp\]\s*\n(#.*\n)*verify_jwt = false/);
+  execFileSync(process.execPath, [path.join(here, "../scripts/build-mcp-function.mjs"), "--check"]);   // throws if stale
 });
 
 for (const t of tests) {

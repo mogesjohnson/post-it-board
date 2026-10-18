@@ -1,0 +1,6 @@
+# Minimal Supabase CLI config, only for deploying the grok-mcp Edge Function.
+project_id = "hooxyhsuckpekksdoytw"
+
+[functions.grok-mcp]
+# grok.com custom connectors send no Supabase JWT; the function is read-only and guarded by a secret path instead.
+verify_jwt = false

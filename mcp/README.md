@@ -1,6 +1,6 @@
 # Read-only MCP server: Grok ↔ Post-it Board
 
-**Status: a draft that runs locally only. It is NOT deployed anywhere.** This server lets Grok (grok.com, the Grok app, and possibly Ara in the car) read the board's topic folders. It can't write anything.
+**Status: ready to deploy as the Supabase Edge Function `grok-mcp` (project `hooxyhsuckpekksdoytw`). Not deployed yet: the box has no Supabase deploy login.** This server lets Grok (grok.com, the Grok app, and possibly Ara in the car) read the board's topic folders. It can't write anything.
 
 ## What Grok gets
 
@@ -23,10 +23,37 @@ So "what did we say about the garden beds?" → `get_topic("garden beds")` → G
 
 ```bash
 node mcp/node.mjs --port 8788            # reads SUPABASE_URL / SUPABASE_ANON_KEY, or falls back to ../config.js
-node tests/mcp.mjs                       # 8 tests, synthetic fixture, no network
+node tests/mcp.mjs                       # 9 tests, synthetic fixture, no network
 ```
 
 Local clients can point straight at `http://127.0.0.1:8788/mcp`, for example `grok mcp add` in the grok CLI or the MCP Inspector. Also verified with the official `@modelcontextprotocol/sdk` 1.32.1 client (Streamable HTTP).
+
+## Deploy (Supabase Edge Function)
+
+The function lives in `supabase/functions/grok-mcp/`. `index.ts` is the entry point and `handler.mjs` holds the secret-path check. `core.mjs` and `topics.mjs` are generated copies; regenerate them with `node scripts/build-mcp-function.mjs`, and the tests fail if they're out of date. `supabase/config.toml` sets `verify_jwt = false` because grok.com sends no Supabase JWT. The secret path is the guard instead.
+
+```bash
+# needs: supabase login (or SUPABASE_ACCESS_TOKEN from https://supabase.com/dashboard/account/tokens)
+node scripts/build-mcp-function.mjs
+supabase secrets set --project-ref hooxyhsuckpekksdoytw MCP_PATH_SECRET="$(cat /path/to/your/secret-file)"   # 24+ chars [A-Za-z0-9_-]
+supabase functions deploy grok-mcp --project-ref hooxyhsuckpekksdoytw --no-verify-jwt
+```
+
+The connector URL is `https://hooxyhsuckpekksdoytw.supabase.co/functions/v1/grok-mcp/<MCP_PATH_SECRET>`. **Never commit it.** Every other path returns a bare 404. If the secret isn't set (or is too short), every request returns 404 (fails closed). The function never logs anything. Supabase's own request logs in your dashboard will still show the path.
+
+How it's protected:
+- It uses the platform's `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+- The service-role key is never read, and any other key is refused at startup.
+- The database grants `anon` only `SELECT` (see `supabase/schema.sql`), so even a bug couldn't write.
+
+To change the secret, run `supabase secrets set MCP_PATH_SECRET=...` and update the URL in grok.com. To remove the connector, run `supabase functions delete grok-mcp`.
+
+## Add it to Grok (grok.com)
+
+1. Go to grok.com → **Connectors** → **New Connector** → **Custom**.
+2. Name it **Post-it Board**, paste the connector URL above, and set authentication to **None**. The secret path does the job.
+3. Save it, then turn the connector on for a chat (or leave it on). Try "What's in my garden folder on the post-it board?"
+4. Connectors set up in the Grok app should also show up in Grok in the Tesla (software 2026.26+, same account). Whether *custom* connectors work with Ara isn't confirmed by xAI.
 
 ## Research: ways to connect grok.com to the board
 
