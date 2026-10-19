@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-18",
+    "pin": "Tesla Earnings Call",
+    "title": "Summary",
+    "body": "- Next earnings call scheduled for Wednesday, January 27th, 2027.\n- Cybercab expansion plans discussed alongside Optimus production costs.\n- NHTSA certification deadline for pedal-free Cybercabs set for October 30th."
+  },
+  "matched": {
+    "dayId": "2cf0909e-1f01-44d3-af4f-030bc7b8b60f",
+    "pinId": "8805fd42-26e0-449f-832d-36c0f541cfe0",
+    "pageId": "f7af230e-16d0-442d-99a3-c4d22fcc3d14",
+    "pinTitle": "Tesla Earnings Call"
+  },
+  "message": "created day 2026-10-18; created pin \"Tesla Earnings Call\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-19T00:36:04.491Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-18"
+}
