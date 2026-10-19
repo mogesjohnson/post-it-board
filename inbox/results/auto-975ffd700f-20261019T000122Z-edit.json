@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "edit",
+  "input": {
+    "op": "edit",
+    "target": "page",
+    "date": "2026-10-17",
+    "pin": "Autopilot limitations",
+    "pageNumber": 1,
+    "body": "Autopilot handles steering and speed on divided roads only; it lacks city driving features. Current status: FSD is statistically safer per mile than average human driving based on Tesla's data, but independent researchers note inflated crash rates due to fleet age differences and selection bias. Open issues include NHTSA probes into red lights, wrong-way maneuvers, low visibility crashes, and robotaxis speeding through school zones. Musk confirmed Hardware Three cannot run unsupervised FSD. FSD vs Autopilot comparison: No direct head-to-head numbers exist because both are lumped under Level 2 in federal data. However, FSD covers more ground (city streets) while Autopilot remains highway-only. Surrogate metrics show fewer harsh braking/acceleration events for FSD versus manual driving, not versus Autopilot."
+  },
+  "matched": {
+    "dayId": "78503996-e605-4ae4-8503-a997d810c888",
+    "pinId": "614b2c59-5837-4d2d-bc68-25e30b2f6ce8",
+    "pageId": "8c5461ea-9cb0-474f-90fd-aab0d345fe16",
+    "pinTitle": "Autopilot limitations"
+  },
+  "message": "Updated page 1 of pin \"Autopilot limitations\".",
+  "processedAt": "2026-10-19T00:12:47.908Z",
+  "pageNumber": 1,
+  "date": "2026-10-17"
+}
