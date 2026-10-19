@@ -1,8 +1,0 @@
-{
-  "op": "edit",
-  "target": "page",
-  "date": "2026-10-15",
-  "pin": "Tesla FSD Update",
-  "pageNumber": 1,
-  "body": "Tesla FSD Update\n- Early rollout began October 13th.\n- Models include S, 3, X, Y, Cybertruck; Beta status removed globally without official announcement.\n- User reports parking hesitation due to cold weather (frost/condensation) causing sensors to misread space and refuse reverse moves despite ample lane space.\n- Grok confirms this is common in cold conditions per Tesla guidance: extreme temperatures interfere with sensor/camera readings, leading to overly cautious behavior.\n- Solutions suggested by Grok: wipe rear/side repeaters quickly, retry once warmed up; service visit if issues persist even on mild days.\n3 notes); Autopark improved to persist through more back-and-forth moves since February.\n- Winter testing footage from Europe shows FSD ready for snow, but frosty-morning reversals remain unsolved locally.\n- Robotaxi avoids this via geofencing (limited launch areas) and fleet learning (edge cases patched over air), though hardware improvements like heated camera housings are also noted."
-}
