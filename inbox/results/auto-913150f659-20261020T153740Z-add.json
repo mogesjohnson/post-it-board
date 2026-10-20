@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-20",
+    "pin": "Tesla Boombox USB Setup",
+    "title": "Summary",
+    "body": "wav' in the Boombox folder.\n- Plug the drive into the glovebox USB port (not charge-only ports).\n- Select USB from the Boombox menu to play sounds when the car locks."
+  },
+  "matched": {
+    "dayId": "7e3607b4-bf62-4ba9-9fd1-6b76a4d2adfd",
+    "pinId": "ca8fc3d3-a5b1-4cf2-b959-2f3613c17144",
+    "pageId": "cc9e11fc-0d82-4ad0-b1ae-30e6d0b9482f",
+    "pinTitle": "Tesla Boombox USB Setup"
+  },
+  "message": "created day 2026-10-20; created pin \"Tesla Boombox USB Setup\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-20T15:48:57.673Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-20"
+}
