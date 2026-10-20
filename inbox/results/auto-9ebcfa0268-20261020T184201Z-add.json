@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-20",
+    "pin": "Billie Eilish Song",
+    "title": "Summary",
+    "body": "- User asked Grok how he heard the song.\n- Grok identified the track as \"Everything I Wanted\".\n- The user confirmed they were singing it."
+  },
+  "matched": {
+    "dayId": "7e3607b4-bf62-4ba9-9fd1-6b76a4d2adfd",
+    "pinId": "021c3c48-63ec-4268-b8ff-bef6931da00f",
+    "pageId": "6b65571e-7610-43b9-b685-1ec9661c7058",
+    "pinTitle": "Billie Eilish Song"
+  },
+  "message": "created pin \"Billie Eilish Song\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-20T20:10:46.899Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-20"
+}
