@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-21",
+    "pin": "Lock chime details",
+    "title": "Summary",
+    "body": "- Pedestrian Warning System projects sound outside while parked.\n- Turn signals produce a hoot while driving but are interior-only."
+  },
+  "matched": {
+    "dayId": "ed4d70f5-c7b5-4b51-b096-92e9c67a8993",
+    "pinId": "4a6e36f9-434a-4058-9df9-c33170d8fde9",
+    "pageId": "cb482fe5-90f4-4cd0-8f60-ada2b6dafadb",
+    "pinTitle": "Lock chime details"
+  },
+  "message": "created day 2026-10-21; created pin \"Lock chime details\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-21T22:12:19.625Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-21"
+}
