@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-23",
+    "pin": "Halloween Mode Trigger",
+    "title": "Summary",
+    "body": "- Sounds activate via the separate 'Trick or Treat' toggle.\n- Exterior noise plays only if both features are enabled.\n- Switching off Sentry Mode disables security alarms when activated."
+  },
+  "matched": {
+    "dayId": "9c389227-51c2-48a7-a183-bcb98573996b",
+    "pinId": "46cf4bf1-43bb-4ad0-bef7-d6ee095e41a0",
+    "pageId": "c542e3dd-4f63-4062-9f58-d83fa6074cd6",
+    "pinTitle": "Halloween Mode Trigger"
+  },
+  "message": "created pin \"Halloween Mode Trigger\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-23T22:15:26.302Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-23"
+}
