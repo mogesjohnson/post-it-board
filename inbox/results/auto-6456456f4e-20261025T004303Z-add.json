@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "add",
+  "input": {
+    "op": "add",
+    "date": "2026-10-24",
+    "pin": "Chicken cooking tips",
+    "title": "Summary",
+    "body": "- Use milk or creamer off heat to create a quick sauce.\n- Add cumin in oil before cooking for flavor.\n- Skip cumin if unavailable; salt, pepper, and paprika suffice."
+  },
+  "matched": {
+    "dayId": "089f42fd-2838-4849-a409-6798556e32aa",
+    "pinId": "e0eb6e65-0c59-4225-a18a-c8463ee2dbaf",
+    "pageId": "f1aaf59d-c0ef-4c40-b43b-810a9d489577",
+    "pinTitle": "Chicken cooking tips"
+  },
+  "message": "created day 2026-10-24; created pin \"Chicken cooking tips\"; added page 1 \"Summary\".",
+  "processedAt": "2026-10-25T00:53:55.231Z",
+  "matchType": "new",
+  "pageNumber": 1,
+  "date": "2026-10-24"
+}
