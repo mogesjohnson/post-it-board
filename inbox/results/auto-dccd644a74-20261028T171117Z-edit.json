@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "op": "edit",
+  "input": {
+    "op": "edit",
+    "target": "page",
+    "date": "2026-10-15",
+    "pin": "Tesla FSD Update",
+    "pageNumber": 1,
+    "body": "Tesla FSD Update"
+  },
+  "matched": {
+    "dayId": "77905592-799d-4327-a6b9-d836fc6334d6",
+    "pinId": "c03b29d8-a89c-4228-ac6b-6fd5f6c6ea71",
+    "pageId": "9f73000e-e5c1-4324-95a9-9f49acf6d1dd",
+    "pinTitle": "Tesla FSD Update"
+  },
+  "message": "Updated page 1 of pin \"Tesla FSD Update\".",
+  "processedAt": "2026-10-28T18:49:58.324Z",
+  "pageNumber": 1,
+  "date": "2026-10-15"
+}
