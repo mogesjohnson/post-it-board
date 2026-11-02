@@ -1,0 +1,7 @@
+{
+  "op": "add",
+  "date": "2026-11-01",
+  "pin": "Tire pressure check",
+  "title": "Summary",
+  "body": "- Current pressure is 36 PSI.\n- Recommended pressure is 42 PSI.\n- This is a 14% drop from recommended level."
+}
