@@ -367,3 +367,16 @@ body.topics-mode .tools .editor-only { display: none; }
   .file::before { left: -14px; width: 12px; }
   .file-body { font-size: 16px; }
 }
+
+/* Owner controls remain outside the folder toggle (no nested buttons). */
+.auth-btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.auth-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
+.auth-btn.signed-in { background: #e5f7df; }
+.folder-heading { display: flex; align-items: center; gap: 8px; }
+.folder-heading .folder-row { flex: 1; min-width: 0; }
+.danger { color: #a1261b; border: 1px solid currentColor; }
+.note > .danger { margin-top: 12px; }
+@media (max-width: 640px) {
+  .folder-heading { flex-wrap: wrap; }
+  .folder-heading .folder-row { flex-basis: 100%; }
+}

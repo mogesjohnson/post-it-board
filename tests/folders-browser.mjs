@@ -82,7 +82,7 @@ try {
   });
 
   await step("open a folder: living summary + the notes filed in it, with dates; URL gets #view=topics&topic=<slug>", async () => {
-    await page.getByRole("button", { name: /Garden Beds/ }).click();
+    await page.locator(".folder-row").filter({ hasText: "Garden Beds" }).click();
     const f = page.locator(".folder.open");
     assert.equal(await f.count(), 1);
     assert.equal(await f.locator(".folder-row").getAttribute("aria-expanded"), "true");
