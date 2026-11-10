@@ -32,19 +32,20 @@ Deleting a pin permanently deletes its pages. There is no recycle bin.
 - **Day picker** (top): newest day first. Use ‹ › to step to older/newer days.
 - **Click a pin** to open it. You see page 1, can go to the previous/next page (or use ← →), and can
   jump with the page chips. **← All pins** (or Esc) takes you back.
-- **Owner tools** (only when signed in, or in demo mode):
+- **Owner tools** (only for verified `board_owners`, or in demo mode):
   - **+** adds a pin (on the board) or a page (inside a pin); **+ day** starts a new day.
   - **✎** renames a pin or edits a page.
   - **☑ Select mode** puts a checkbox on every pin (the whole pin, all pages) and on every page.
     The **🗑 trash can** asks you to confirm, then deletes the selected items for good.
-- **🔒 Lock icon:** owner sign-in (email + password). Everyone else gets a read-only board.
+- **Sign in / Sign out:** Supabase owner email + password. Signed-out visitors and signed-in non-owners stay read-only. Passwords are never saved by the site.
+- **Delete** appears on each folder and note for owners. A named confirmation is required. Deleting a folder removes only that pin and all its pages, even if another folder has the same name; deleting a note keeps its folder and other notes. Deletes are permanent and the view refreshes afterward.
 - **Days / Topics tabs:** *Days* is the board above. *Topics* is a **folder tree**: every pin across all days
   is a 📁 folder, most recently updated first (latest `updated_at` of the pin or any of its pages), showing its
   name, note count and last-updated date (plus its day when two folders share a name). Click a folder to open it:
   📌 **Summary** (page 1, the topic's living summary that every chat on the topic is merged into) and the other
   📄 notes filed in it (page 2, 3, … with their dates); **Open ›** opens that page, **Open on its day ›** the pin
   on its own day, and **← Topics** (or Esc) comes back with the folder still open. **Search folders by name**
-  filters the tree as you type (every word must appear in the name; Esc clears). The Topics view is read-only;
+  filters the tree as you type (every word must appear in the name; Esc clears). Owners can delete folders and notes directly in Topics;
   edit a topic by opening it.
 
 Links are shareable via the URL hash, e.g. `#day=2026-10-05&pin=<id>&page=2`, `#view=topics` for the folder
@@ -67,6 +68,7 @@ e.g. `garden-beds`; two folders with the same name get `-<first 6 characters of 
 | `.github/workflows/inbox.yml` | applies JSON commands pushed to the `inbox` branch |
 | `scripts/write-config.mjs` | writes `config.js` from env vars |
 | `tests/` | offline tests for `post.mjs`, the inbox workflow step and the Topics helpers (`node tests/run.mjs`, `bash tests/workflow.sh`, `node tests/topics.mjs`); a browser check of the folder view on a synthetic demo board (`tests/fixtures/topics-demo.json`, demo mode, never real notes): `PLAYWRIGHT_CORE=<path to playwright-core> node tests/folders-browser.mjs [--shot out.png]` |
+| `tests/owner-delete-browser.mjs` | synthetic Auth/PostgREST browser checks for owner-only controls, sign-in/out, named confirmations, exact folder/note deletion, refresh and session changes; run with `PLAYWRIGHT_CORE=<path to playwright-core> node tests/owner-delete-browser.mjs` |
 | `.nojekyll` | tells GitHub Pages to serve files as-is |
 
 ## Demo mode
@@ -118,10 +120,8 @@ Steps:
    (Or just edit `config.js` by hand.) Then get `config.js` onto `main` through a pull request, since
    `main` doesn't accept direct pushes (see [Branch protection](#branch-protection)). The anon/publishable key is **meant to be public**. RLS keeps it
    read-only. **Never** put the `service_role` / secret key in `config.js`. The script refuses it.
-5. Open the site and click the **🔒 lock**. Sign in with your owner email and password. The **+**, select
-   and trash tools appear. The session is kept in `localStorage` and refreshed automatically. Click the
-   lock again to sign out. (Signing in with an account that isn't in `board_owners` still shows the
-   tools, but every change is rejected by the database.)
+5. Open the site and click **Sign in**. Sign in with your owner email and password. The **+**, select
+   and trash tools appear. The session is kept in `localStorage` and refreshed automatically. Click **Sign out** to leave owner mode. Accounts not listed in `board_owners` never see editing or delete tools; the database also enforces this.
 
 ## How the bot posts
 

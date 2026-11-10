@@ -62,7 +62,7 @@
     if (isNaN(d)) return "";
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
-  function canEdit() { return store.mode === "local" || Auth.isSignedIn(); }
+  function canEdit() { return store.mode === "local" || Auth.isOwner(); }
   var toastTimer;
   function toast(msg) {
     var t = $("toast"); t.textContent = msg; t.hidden = false;
@@ -232,7 +232,9 @@
     var lock = $("lockBtn");
     lock.hidden = store.mode !== "supabase";
     lock.classList.toggle("signed-in", Auth.isSignedIn());
-    lock.title = Auth.isSignedIn() ? "Signed in as " + Auth.email() + " — click to sign out" : "Owner sign in";
+    lock.title = Auth.isSignedIn() ? (Auth.isOwner() ? "Owner signed in" : "Signed in — read-only") : "Owner sign in";
+    lock.setAttribute("aria-label", Auth.isSignedIn() ? "Sign out" : "Sign in");
+    $("lockLabel").textContent = Auth.isSignedIn() ? "Sign out" : "Sign in";
     $("lockShackle").setAttribute("d", Auth.isSignedIn() ? "M8 11V8a4 4 0 0 1 8 0v3" : "M8 11V8a4 4 0 0 1 7.5-2");
   }
 
@@ -254,11 +256,11 @@
         "aria-label": "Open pin " + pin.title,
         style: "--r:" + tilt(pin.id) + ";--delay:" + (fresh ? 0 : Math.min(i * 0.07, 0.6)) + "s",
         onclick: function (e) {
-          if (e.target.classList.contains("pick")) return;
+          if (e.target.closest("button, .pick")) return;
           if (state.selecting) toggleSel(state.selPins, pin.id);
           else openPin(pin.id, 0, "back").catch(fail);
         },
-        onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
+        onkeydown: function (e) { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
         onanimationend: function (e) { if (e.target === e.currentTarget) e.currentTarget.style.animation = "none"; },
       }, [
         tack(),
@@ -266,6 +268,7 @@
           "data-focus": "pick-pin:" + pin.id, onchange: function () { toggleSel(state.selPins, pin.id); } }),
         el("h3", { text: pin.title }),
         el("div", { class: "meta", text: pin.page_count + (pin.page_count === 1 ? " page" : " pages") }),
+        deleteButton("Delete folder " + pin.title, function () { return deleteFolder(pin); }),
       ]);
       list.appendChild(note);
     });
@@ -322,7 +325,9 @@
       el("span", { class: "folder-badge", text: plural(t.page_count, "note", "notes") }),
       stampEl("folder-updated", t.updated_at, "Updated "),
     ]);
-    var li = el("li", { class: "folder" + (open ? " open" : ""), "data-slug": t.slug }, [row]);
+    var li = el("li", { class: "folder" + (open ? " open" : ""), "data-slug": t.slug }, [
+      el("div", { class: "folder-heading" }, [row, deleteButton("Delete folder " + t.title, function () { return deleteFolder(t); })]),
+    ]);
     if (!open) return li;
     var files = el("ul", { class: "folder-files", "aria-label": "Notes in " + t.title });
     files.appendChild(el("li", { class: "file file-summary" }, [
@@ -331,6 +336,9 @@
         el("span", { class: "file-name", text: "Summary" + (t.page_title && t.page_title !== "Summary" ? " · " + t.page_title : "") }),
         el("span", { class: "file-kind", text: "living summary of every chat on this topic" }),
         stampEl("file-date", t.summary_updated_at, "Updated "),
+        t.summary_id ? deleteButton("Delete note " + (t.page_title || "Summary") + " from " + t.title, function () {
+          return deleteNote({ id: t.summary_id, title: t.page_title || "Summary" }, t);
+        }) : null,
       ]),
       el("div", { class: "file-body" + (t.summary ? "" : " none"), text: t.summary || "No summary yet." }),
     ]));
@@ -342,6 +350,7 @@
           el("span", { class: "file-name", text: "Page " + n.number + (n.title ? " · " + n.title : "") }),
           stampEl("file-date", n.created_at || n.updated_at, ""),
           edited ? stampEl("file-date edited", n.updated_at, "edited ") : null,
+          deleteButton("Delete note " + (n.title || "Page " + n.number) + " from " + t.title, function () { return deleteNote(n, t); }),
           el("button", { class: "chip-btn file-open", text: "Open ›", "aria-label": "Open page " + n.number + " of " + t.title,
             onclick: function () { openTopic(t, n.number - 1).catch(fail); } }),
         ]),
@@ -367,6 +376,7 @@
       el("button", { class: "chip-btn", text: state.fromTopics ? "← Topics" : "← All pins", "data-focus": "back", onclick: closePin }),
       el("h2", { text: pin.title }),
       el("span", { class: "spacer" }),
+      deleteButton("Delete folder " + pin.title, function () { return deleteFolder(pin); }),
       canEdit() ? el("button", { class: "chip-btn", text: "✎ Rename pin", onclick: renamePin }) : null,
       canEdit() && state.pages.length ? el("button", { class: "chip-btn", text: "✎ Edit page", onclick: editPage }) : null,
     ]);
@@ -381,15 +391,16 @@
         class: "page-chip" + (i === state.pageIdx ? " current" : "") + (selected ? " selected" : ""),
         role: "button", tabindex: "0", "data-focus": "chip:" + pg.id,
         onclick: function (e) {
-          if (e.target.classList.contains("pick")) return;
+          if (e.target.closest("button, .pick")) return;
           if (state.selecting) toggleSel(state.selPages, pg.id);
           else { state.pageIdx = i; render(); }
         },
-        onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
+        onkeydown: function (e) { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
       }, [
         el("input", { type: "checkbox", class: "pick", "aria-label": "Select page " + (i + 1), checked: selected,
           "data-focus": "pick-page:" + pg.id, onchange: function () { toggleSel(state.selPages, pg.id); } }),
         el("span", { text: (i + 1) + (pg.title ? " · " + pg.title : "") }),
+        deleteButton("Delete note " + (pg.title || "Page " + (i + 1)) + " from " + pin.title, function () { return deleteNote(pg, pin); }),
       ]));
     });
     wrap.appendChild(strip);
@@ -419,13 +430,59 @@
     if (!on) { state.selPins.clear(); state.selPages.clear(); }
   }
 
+  function deleteButton(label, action) {
+    return canEdit() ? el("button", { class: "chip-btn danger", text: "Delete", "aria-label": label,
+      onclick: async function (e) {
+        e.stopPropagation();
+        e.currentTarget.disabled = true;
+        try { await action(); } catch (ex) { fail(ex); }
+        finally { e.target.disabled = false; }
+      } }) : null;
+  }
+  async function refreshDeleted(folderId) {
+    navSeq++;
+    state.selPins.clear(); state.selPages.clear();
+    await loadDays(); await loadPins();
+    if (state.pinId === folderId) { state.pinId = null; state.pages = []; state.pageIdx = 0; }
+    if (state.view === "topics" || state.fromTopics) {
+      if (!state.pinId) { await showTopics(); return; }
+    }
+    if (state.pinId) {
+      state.pages = await store.listPages(state.pinId);
+      state.pageIdx = Math.max(0, Math.min(state.pageIdx, state.pages.length - 1));
+    }
+    render();
+  }
+  async function deleteFolder(folder) {
+    if (!canEdit()) return;
+    var day = folder.board_date || (currentDay() || {}).board_date;
+    if (!confirm("Permanently delete folder “" + folder.title + "”" + (day ? " (" + fmtDate(day) + ")" : "") +
+      " and ALL its notes?\n\nThis cannot be undone.")) return;
+    // A folder is exactly one pin id, not every pin with the same title.
+    await store.deletePins([folder.id]);
+    state.openFolders.delete(folder.id); state.topicSlug = null;
+    await refreshDeleted(folder.id);
+    toast("Folder and its notes deleted.");
+  }
+  async function deleteNote(note, folder) {
+    if (!canEdit()) return;
+    if (!confirm("Permanently delete note “" + (note.title || "Untitled note") + "” from “" + folder.title +
+      "”?\n\nThe folder and its other notes will stay. This cannot be undone.")) return;
+    await store.deletePages([note.id]);
+    await refreshDeleted();
+    toast("Note deleted.");
+  }
+
   async function deleteSelected() {
+    if (!canEdit()) return;
     var np = state.selPins.size, ng = state.selPages.size;
     if (!np && !ng) return;
     var parts = [];
     if (np) parts.push(np + (np === 1 ? " pin (and all its pages)" : " pins (and all their pages)"));
     if (ng) parts.push(ng + (ng === 1 ? " page" : " pages"));
-    if (!confirm("Permanently delete " + parts.join(" and ") + "?\n\nThis cannot be undone — there is no recycle bin.")) return;
+    if (!confirm("Permanently delete " + parts.join(" and ") + "?\n" + state.pins.filter(function (p) { return state.selPins.has(p.id); }).map(function (p) { return p.title; }).concat(
+      state.pages.filter(function (p) { return state.selPages.has(p.id); }).map(function (p) { return p.title || "Untitled note"; })
+    ).join("\n") + "\n\nThis cannot be undone — there is no recycle bin.")) return;
     try {
       if (ng) await store.deletePages(Array.from(state.selPages));
       if (np) await store.deletePins(Array.from(state.selPins));
@@ -466,10 +523,12 @@
       if (e.submitter && e.submitter.value === "cancel") return; // let dialog close
       e.preventDefault();
       var data = {};
-      fields.forEach(function (f) { data[f.name] = form.elements[f.name].value.trim(); });
-      try { await onSubmit(data); dlg.close(); }
+      fields.forEach(function (f) { data[f.name] = f.type === "password" ? form.elements[f.name].value : form.elements[f.name].value.trim(); });
+      try { $("modalOk").disabled = true; await onSubmit(data); dlg.onclose(); dlg.close(); }
       catch (ex) { err.textContent = ex.message || String(ex); err.hidden = false; }
+      finally { $("modalOk").disabled = false; }
     };
+    dlg.onclose = function () { box.querySelectorAll('input[type="password"]').forEach(function (p) { p.value = ""; }); };
     dlg.showModal();
   }
 
@@ -548,8 +607,8 @@
       { name: "password", label: "Password", type: "password", required: true, autocomplete: "current-password",
         hint: "Only the board owner can add or delete notes. Everyone else sees a read-only board." },
     ], "Sign in", async function (d) {
-      await Auth.signIn(d.email, d.password);
-      render(); toast("Signed in as " + Auth.email());
+      try { await Auth.signIn(d.email, d.password); } finally { render(); }
+      toast(Auth.isOwner() ? "Owner signed in — delete tools are available." : "Signed in — this account is not a board owner. Read-only view.");
     });
   }
 
@@ -601,10 +660,12 @@
     toast("Signed out — your session expired. The board is read-only.");
   };
   // Another tab signed in or out.
-  Auth.onChange = function () {
-    if (!state.ready) return;
-    render();
-    toast(Auth.isSignedIn() ? "Signed in as " + Auth.email() : "Signed out in another tab — read-only view.");
+  Auth.onChange = async function () {
+    // Hide tools immediately while verifying an account changed in another tab.
+    Auth.ownerId = null;
+    if (state.ready) render();
+    try { await Auth.checkOwner(); } catch (e) { fail(e); }
+    if (state.ready) render();
   };
   // Phones drop the weekday from the day picker (see fmtDate); relabel when the width crosses that line.
   if (window.matchMedia) {
@@ -618,6 +679,9 @@
     $("banner").hidden = store.mode !== "local";
     var h = readHash();
     try {
+      if (store.mode === "supabase") {
+        try { await Auth.checkOwner(); } catch (e) { toast("Could not verify owner access. The board is read-only."); }
+      }
       await loadDays(h.day);
       if (h.view === "topics" && !h.pin) await showTopics(null, h.topic);
       else {

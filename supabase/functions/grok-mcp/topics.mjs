@@ -61,6 +61,7 @@ const module = { exports: {} };
         color: p.color,
         board_date: (p.day && p.day.board_date) || p.board_date || "",
         updated_at: lastUpdated(p),
+        summary_id: first ? first.id : null,
         summary: first ? String(first.body || "") : "",
         page_title: first ? first.title || "" : "",
         summary_updated_at: first ? latest([first]) : "",

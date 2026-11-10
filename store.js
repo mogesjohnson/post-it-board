@@ -55,9 +55,11 @@
   var OFFLINE = "Can't reach the board's database — check your connection.";
   var Auth = {
     session: null,
+    ownerId: null,     // verified through board_owners RLS, never inferred from a login alone
     onExpired: null,   // set by the UI: called when a session is dropped because it expired (not on sign-out)
     onChange: null,    // set by the UI: called when another tab signs in or out
     _refreshing: null, // the one refresh in flight, shared by every request that needs it
+    _reportedUser: null, // identity, so an account switch cannot inherit another owner's tools
     _reported: false,  // signed-in state the UI last knew about (for the cross-tab storage event)
     // Read the session from localStorage: another tab may have refreshed it or signed out.
     load: function () {
@@ -69,11 +71,21 @@
     save: function (s) {
       if (s && !s.expires_at && s.expires_in) s.expires_at = Math.floor(Date.now() / 1000) + Number(s.expires_in);
       this.session = s;
+      this._reportedUser = (s && s.user && s.user.id) || null;
       this._reported = this.isSignedIn(); // this tab's own change: its UI already knows
       if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
       else localStorage.removeItem(SESSION_KEY);
     },
     isSignedIn: function () { return !!(this.session && this.session.access_token); },
+    isOwner: function () { return this.isSignedIn() && !!this.ownerId && this.ownerId === (this.session.user || {}).id; },
+    checkOwner: async function () {
+      this.ownerId = null;
+      if (!this.isSignedIn()) return false;
+      var id = (this.session.user || {}).id;
+      var rows = await window.PostItStore.req("GET", "board_owners?select=user_id&limit=1");
+      if (this.isSignedIn() && (this.session.user || {}).id === id && rows.some(function (r) { return r.user_id === id; })) this.ownerId = id;
+      return this.isOwner();
+    },
     email: function () { return (this.session && this.session.user && this.session.user.email) || ""; },
     signIn: async function (email, password) {
       var res;
@@ -87,6 +99,7 @@
       var data = await res.json().catch(function () { return {}; });
       if (!res.ok) throw new Error(data.error_description || data.msg || data.message || "Sign-in failed (" + res.status + ")");
       this.save(data);
+      await this.checkOwner();
       return data;
     },
     // Resolves to a fresh session. `stale` is the access token a request was rejected with: if the session has
@@ -142,6 +155,7 @@
     },
     signOut: async function () {
       var t = this.session && this.session.access_token;
+      this.ownerId = null;
       this.save(null);
       if (t) {
         try {
@@ -365,12 +379,15 @@
   if (configured) {
     Auth.load();
     Auth._reported = Auth.isSignedIn();
+    Auth._reportedUser = (Auth.session && Auth.session.user && Auth.session.user.id) || null;
     // Another tab signed in or out: follow it.
     window.addEventListener("storage", function (e) {
       if (e.key !== SESSION_KEY && e.key !== null) return;
       // Compare with what the UI was last told, not Auth.session: token() may already have loaded the change.
       Auth.load();
-      if (Auth._reported === Auth.isSignedIn()) return;
+      var id = (Auth.session && Auth.session.user && Auth.session.user.id) || null;
+      if (Auth._reported === Auth.isSignedIn() && Auth._reportedUser === id) return;
+      Auth._reportedUser = id;
       Auth._reported = Auth.isSignedIn();
       if (typeof Auth.onChange === "function") Auth.onChange();
     });
